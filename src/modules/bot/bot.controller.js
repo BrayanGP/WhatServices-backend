@@ -1,4 +1,4 @@
-﻿const Conversation = require('./conversation.model');
+const Conversation = require('./conversation.model');
 const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
 const { sendMessage } = require('../../utils/whatsapp');
