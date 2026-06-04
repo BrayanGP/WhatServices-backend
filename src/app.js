@@ -11,6 +11,7 @@ const reviewRoutes = require('./modules/reviews/reviews.routes');
 const subscriptionRoutes = require('./modules/subscriptions/subscriptions.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 const botRoutes = require('./modules/bot/bot.routes');
+const waRoutes = require('./modules/wa/wa.routes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bot', botRoutes);
+app.use('/wa', waRoutes);
 
 app.use(errorHandler);
 
