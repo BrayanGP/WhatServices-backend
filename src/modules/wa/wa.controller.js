@@ -45,6 +45,33 @@ const go = async (req, res) => {
   }
 };
 
+// Redireccion para CALIFICAR a un empleado: su QR personal apunta aqui
+const rate = async (req, res) => {
+  try {
+    const number = await getActiveNumber();
+    if (!number) return res.status(503).send('El WhatsApp no está disponible en este momento.');
+    const id = req.params.id;
+    const text = encodeURIComponent(`Quiero calificar mi servicio #rate-${id}`);
+    return res.redirect(302, `https://wa.me/${number}?text=${text}`);
+  } catch (err) {
+    console.error('[wa/rate]', err);
+    res.status(500).send('Error');
+  }
+};
+
+// PNG del QR personal de calificacion de un empleado
+const rateQr = async (req, res) => {
+  try {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const target = `${proto}://${req.get('host')}/wa/rate/${req.params.id}`;
+    res.type('png');
+    await QRCode.toFileStream(res, target, { width: 600, margin: 2 });
+  } catch (err) {
+    console.error('[wa/rateQr]', err);
+    res.status(500).send('Error');
+  }
+};
+
 // PNG del QR que codifica la URL fija /wa/go (para imprimir en pancartas)
 const qr = async (req, res) => {
   try {
@@ -58,4 +85,4 @@ const qr = async (req, res) => {
   }
 };
 
-module.exports = { go, qr, getActiveNumber };
+module.exports = { go, qr, rate, rateQr, getActiveNumber };

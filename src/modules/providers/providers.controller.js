@@ -135,4 +135,19 @@ const uploadPhotos = async (req, res, next) => {
   }
 };
 
-module.exports = { register, list, getOne, create, update, updateAvailability, uploadPhotos };
+const uploadProfilePhoto = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file' });
+    const provider = await Provider.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { profilePhoto: { url: req.file.path, publicId: req.file.filename } },
+      { new: true }
+    );
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    res.json({ profilePhoto: provider.profilePhoto });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto };

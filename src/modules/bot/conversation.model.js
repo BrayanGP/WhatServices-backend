@@ -17,7 +17,10 @@ const conversationSchema = new mongoose.Schema({
   // Estado de la maquina de estados del bot
   step: {
     type: String,
-    enum: ['IDLE', 'AWAITING_SERVICE', 'AWAITING_ZIP', 'SHOWING_RESULTS', 'HUMAN', 'END'],
+    enum: [
+      'IDLE', 'AWAITING_SERVICE', 'AWAITING_MODE', 'AWAITING_ZIP', 'SHOWING_RESULTS',
+      'RATING_SCORE', 'RATING_COMMENT', 'HUMAN', 'END',
+    ],
     default: 'IDLE',
   },
   // Datos capturados del lead

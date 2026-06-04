@@ -2,17 +2,16 @@ const Fuse = require('fuse.js');
 const Conversation = require('./conversation.model');
 const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
-const { sendText } = require('../../utils/evolution');
+const Review = require('../reviews/review.model');
+const { sendText, sendMedia } = require('../../utils/evolution');
 const { CLIENT_URL } = require('../../config/env');
 
 // ----- Helpers -----
 
 const extractIncoming = (req) => {
-  // Formato Evolution: { event, instance, data: { key, pushName, message } }
   const data = req.body?.data;
   if (!data) return null;
   const remoteJid = data.key?.remoteJid || '';
-  // Ignorar grupos y estados
   if (remoteJid.endsWith('@g.us') || remoteJid.includes('broadcast')) return null;
   const phone = remoteJid.split('@')[0];
   const fromMe = data.key?.fromMe === true;
@@ -29,46 +28,67 @@ const getPostalCode = (text) => {
   return m ? m[0] : null;
 };
 
-// Busca proveedores de un servicio priorizando por codigo postal, luego ciudad, luego rating
-const findNearbyProviders = async (service, postalCode) => {
-  const base = {
-    categories: service,
-    availability: 'available',
-    isBlocked: false,
-  };
-  // 1) Mismo CP
-  let providers = await Provider.find({ ...base, postalCode })
-    .sort({ 'rating.average': -1 })
-    .limit(5)
-    .lean();
+// detecta una calificacion entrante: "#rate-<idprovider>" en el texto del deep link
+const getRateProviderId = (text) => {
+  const m = text.match(/#rate-([a-f0-9]{24})/i);
+  return m ? m[1] : null;
+};
 
-  // 2) Completar con otros del mismo servicio (mejor rating) si faltan
-  if (providers.length < 5) {
-    const ids = providers.map((p) => p._id);
-    const extra = await Provider.find({ ...base, _id: { $nin: ids } })
-      .sort({ 'rating.average': -1 })
-      .limit(5 - providers.length)
-      .lean();
-    providers = [...providers, ...extra];
+const getScore = (text) => {
+  const m = text.match(/[1-5]/);
+  return m ? Number(m[0]) : null;
+};
+
+// Busca proveedores de un servicio. mode: 'near' (por CP) | 'score' (mejor rating)
+const findProviders = async (service, { mode, postalCode } = {}) => {
+  const base = { categories: service, availability: 'available', isBlocked: false };
+  if (mode === 'near' && postalCode) {
+    let providers = await Provider.find({ ...base, postalCode })
+      .sort({ 'rating.average': -1 }).limit(5).lean();
+    if (providers.length < 5) {
+      const ids = providers.map((p) => p._id);
+      const extra = await Provider.find({ ...base, _id: { $nin: ids } })
+        .sort({ 'rating.average': -1 }).limit(5 - providers.length).lean();
+      providers = [...providers, ...extra];
+    }
+    return providers;
   }
-  return providers;
+  // score
+  return Provider.find(base).sort({ 'rating.average': -1, 'rating.count': -1 }).limit(5).lean();
 };
 
-const saveMsg = (conv, from, text) => {
-  conv.messages.push({ from, text, at: new Date() });
-};
+const saveMsg = (conv, from, text) => conv.messages.push({ from, text, at: new Date() });
 
 const reply = async (conv, phone, text) => {
   saveMsg(conv, 'bot', text);
   await sendText(phone, text, conv.instance);
 };
 
-// ----- Webhook verification (compat) -----
+// Envia el catalogo: foto de perfil + datos por cada proveedor, y un texto final con el link
+const sendCatalog = async (conv, phone, providers, service, cp) => {
+  for (let i = 0; i < providers.length; i++) {
+    const p = providers[i];
+    const caption =
+      `*${i + 1}. ${p.businessName}*\n` +
+      `📞 ${p.phone}\n` +
+      `⭐ ${p.rating?.average || 0}/5 (${p.rating?.count || 0})` +
+      `${p.city ? ` · ${p.city}` : ''}`;
+    if (p.profilePhoto?.url) {
+      await sendMedia(phone, p.profilePhoto.url, caption, conv.instance);
+      saveMsg(conv, 'bot', `[foto] ${caption}`);
+    } else {
+      await reply(conv, phone, caption);
+    }
+  }
+  const link = `${CLIENT_URL}/providers?category=${encodeURIComponent(service)}${cp ? `&cp=${cp}` : ''}`;
+  await reply(conv, phone, `👉 Ve sus perfiles, trabajos y fotos aquí:\n${link}\n\nEscribe otro servicio si necesitas algo más.`);
+};
+
+// ----- Webhook -----
 const verifyWebhook = (req, res) => res.sendStatus(200);
 
-// ----- Webhook receiver (Evolution) -----
 const handleIncoming = async (req, res) => {
-  res.sendStatus(200); // responder rapido a Evolution
+  res.sendStatus(200);
 
   try {
     const event = req.body?.event;
@@ -78,97 +98,138 @@ const handleIncoming = async (req, res) => {
     if (!msg || msg.fromMe || !msg.text) return;
 
     const { phone, text, name } = msg;
-    const instance = req.body?.instance; // instancia por la que entro el mensaje
+    const instance = req.body?.instance;
 
     let conv = await Conversation.findOne({ phone });
     if (!conv) conv = await Conversation.create({ phone, name, instance });
     if (name && !conv.name) conv.name = name;
-    if (instance) conv.instance = instance; // por si cambio de instancia
+    if (instance) conv.instance = instance;
     conv.lastActivity = new Date();
     saveMsg(conv, 'client', text);
 
-    // Si un humano tomo el control, no responde el bot
-    if (conv.humanTakeover) {
+    if (conv.humanTakeover) { await conv.save(); return; }
+
+    const lower = text.toLowerCase();
+
+    // ---- Entrada de CALIFICACION (QR del empleado) ----
+    const rateId = getRateProviderId(text);
+    if (rateId && !['RATING_SCORE', 'RATING_COMMENT'].includes(conv.step)) {
+      const prov = await Provider.findById(rateId).lean();
+      if (prov) {
+        conv.context = { ...conv.context, ratingProviderId: rateId, ratingProviderName: prov.businessName };
+        conv.step = 'RATING_SCORE';
+        await reply(conv, phone,
+          `¡Gracias por usar *${prov.businessName}*! 🙌\n\n¿Cómo calificarías el servicio? Responde con un número del *1 al 5* (5 = excelente).`);
+        await conv.save();
+        return;
+      }
+    }
+
+    if (conv.step === 'RATING_SCORE') {
+      const score = getScore(text);
+      if (!score) {
+        await reply(conv, phone, 'Por favor responde con un número del *1 al 5*.');
+      } else {
+        conv.context = { ...conv.context, ratingScore: score };
+        conv.step = 'RATING_COMMENT';
+        await reply(conv, phone, `¡Gracias! ⭐ ${score}/5\n\n¿Quieres dejar un *comentario*? Escríbelo, o pon *no* para terminar.`);
+      }
       await conv.save();
       return;
     }
 
-    const categories = await Category.find({ isActive: true }).lean();
-    const lower = text.toLowerCase();
+    if (conv.step === 'RATING_COMMENT') {
+      const comment = ['no', 'n', 'nada'].includes(lower) ? '' : text;
+      const providerId = conv.context?.ratingProviderId;
+      const score = conv.context?.ratingScore;
+      if (providerId && score) {
+        await Review.create({
+          providerId, rating: score, comment,
+          reviewerPhone: phone, reviewerName: conv.name, source: 'whatsapp',
+        });
+        const reviews = await Review.find({ providerId });
+        const avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
+        await Provider.findByIdAndUpdate(providerId, {
+          'rating.average': parseFloat(avg.toFixed(1)),
+          'rating.count': reviews.length,
+        });
+      }
+      conv.context = {};
+      conv.step = 'END';
+      await reply(conv, phone, '¡Listo! Tu calificación quedó registrada. 🙏 Gracias por ayudar a otros a elegir mejor.');
+      await conv.save();
+      return;
+    }
 
-    // Fuzzy match contra nombre + slug de categorias
-    const fuse = new Fuse(categories, {
-      keys: ['name', 'slug'],
-      threshold: 0.45,
-      ignoreLocation: true,
-    });
+    // ---- Flujo de busqueda de servicio ----
+    const categories = await Category.find({ isActive: true }).lean();
+    const fuse = new Fuse(categories, { keys: ['name', 'slug'], threshold: 0.45, ignoreLocation: true });
     const matchCategory = () => {
       const r = fuse.search(lower);
       return r.length ? r[0].item : null;
     };
-
     const servicesList = categories.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
 
-    // ---- FSM ----
+    const askMode = async (serviceName) => {
+      conv.selectedService = serviceName;
+      conv.step = 'AWAITING_MODE';
+      await reply(conv, phone,
+        `Perfecto, *${serviceName}* ✅\n\n¿Cómo prefieres ver las recomendaciones?\n\n1️⃣ Los *5 más cercanos a ti*\n2️⃣ Los *5 mejor calificados*\n\nResponde *1* / *cerca* o *2* / *mejor*.`);
+    };
+
     if (conv.step === 'IDLE' || conv.step === 'END') {
-      // intento directo: tal vez ya escribio un servicio
       const matched = matchCategory();
-      if (matched) {
-        conv.selectedService = matched.name;
-        conv.step = 'AWAITING_ZIP';
-        await reply(conv, phone,
-          `¡Genial! Buscas *${matched.name}* 👍\n\n¿Quieres que busque profesionales *cerca de ti*? Dime tu *código postal* (5 dígitos).`);
-      } else {
+      if (matched) await askMode(matched.name);
+      else {
         conv.step = 'AWAITING_SERVICE';
         await reply(conv, phone,
-          `¡Hola${name ? ' ' + name : ''}! 👋 Bienvenido a *WhatServices*.\n\nTe conectamos con profesionales de confianza para tu hogar:\n\n${servicesList}\n\n¿Qué servicio necesitas? Escríbelo (ej. "plomería" o "se me rompió un tubo").`);
+          `¡Hola${name ? ' ' + name : ''}! 👋 Bienvenido a *WhatServices*.\n\nTe conectamos con profesionales de confianza:\n\n${servicesList}\n\n¿Qué servicio necesitas? (ej. "plomería" o "se me rompió un tubo")`);
       }
     } else if (conv.step === 'AWAITING_SERVICE') {
       const matched = matchCategory();
-      if (matched) {
-        conv.selectedService = matched.name;
+      if (matched) await askMode(matched.name);
+      else await reply(conv, phone, `No reconocí ese servicio 🤔. Elige uno:\n\n${servicesList}`);
+    } else if (conv.step === 'AWAITING_MODE') {
+      const wantsNear = /\b(1|cerca|cercanos|cercano|near|ubicaci)/i.test(lower);
+      const wantsScore = /\b(2|mejor|mejores|calificad|score|estrella)/i.test(lower);
+      if (wantsNear) {
         conv.step = 'AWAITING_ZIP';
-        await reply(conv, phone,
-          `Perfecto, *${matched.name}* ✅\n\nPara encontrar profesionales cerca, dime tu *código postal* (5 dígitos).`);
+        await reply(conv, phone, 'Para buscar cerca de ti, dime tu *código postal* (5 dígitos).');
+      } else if (wantsScore) {
+        const providers = await findProviders(conv.selectedService, { mode: 'score' });
+        conv.suggestedProviders = providers.map((p) => p._id);
+        if (!providers.length) {
+          await reply(conv, phone, `Por ahora no tengo profesionales de *${conv.selectedService}* disponibles 😕.`);
+          conv.step = 'END';
+        } else {
+          await reply(conv, phone, `Estos son los *${providers.length}* mejor calificados en *${conv.selectedService}*:`);
+          await sendCatalog(conv, phone, providers, conv.selectedService, null);
+          conv.step = 'SHOWING_RESULTS';
+        }
       } else {
-        await reply(conv, phone,
-          `No reconocí ese servicio 🤔. Elige uno de la lista:\n\n${servicesList}`);
+        await reply(conv, phone, 'Responde *1* (más cercanos) o *2* (mejor calificados).');
       }
     } else if (conv.step === 'AWAITING_ZIP') {
       const cp = getPostalCode(text);
       if (!cp) {
-        await reply(conv, phone, 'Por favor envíame tu *código postal* (5 dígitos), por ejemplo: 06000.');
+        await reply(conv, phone, 'Envíame tu *código postal* (5 dígitos), por ejemplo: 06000.');
       } else {
         conv.postalCode = cp;
-        const providers = await findNearbyProviders(conv.selectedService, cp);
+        const providers = await findProviders(conv.selectedService, { mode: 'near', postalCode: cp });
         conv.suggestedProviders = providers.map((p) => p._id);
-
         if (!providers.length) {
-          await reply(conv, phone,
-            `Por ahora no tengo profesionales de *${conv.selectedService}* disponibles en tu zona 😕. Intenta más tarde o escribe otro servicio.`);
+          await reply(conv, phone, `No tengo profesionales de *${conv.selectedService}* en tu zona 😕. Intenta más tarde.`);
           conv.step = 'END';
         } else {
-          let body = `Estos son los *${providers.length}* profesionales de *${conv.selectedService}* mejor valorados para ti:\n\n`;
-          providers.forEach((p, i) => {
-            body += `*${i + 1}. ${p.businessName}*\n📞 ${p.phone}\n⭐ ${p.rating?.average || 0}/5${p.city ? ` · ${p.city}` : ''}\n\n`;
-          });
-          const link = `${CLIENT_URL}/providers?category=${encodeURIComponent(conv.selectedService)}&cp=${cp}`;
-          body += `👉 Ve sus perfiles, trabajos y fotos aquí:\n${link}\n\nEscribe otro servicio si necesitas algo más.`;
-          await reply(conv, phone, body);
+          await reply(conv, phone, `Estos son los *${providers.length}* profesionales de *${conv.selectedService}* más cercanos a ti:`);
+          await sendCatalog(conv, phone, providers, conv.selectedService, cp);
           conv.step = 'SHOWING_RESULTS';
         }
       }
     } else if (conv.step === 'SHOWING_RESULTS') {
       const matched = matchCategory();
-      if (matched) {
-        conv.selectedService = matched.name;
-        conv.step = 'AWAITING_ZIP';
-        await reply(conv, phone,
-          `¡Claro! Ahora *${matched.name}* ✅\n\n¿En qué *código postal* lo necesitas?`);
-      } else {
-        await reply(conv, phone,
-          `¿Necesitas otro servicio? Dímelo (ej. ${categories.slice(0, 3).map((c) => c.name).join(', ')}...).`);
-      }
+      if (matched) await askMode(matched.name);
+      else await reply(conv, phone, `¿Necesitas otro servicio? Dímelo (ej. ${categories.slice(0, 3).map((c) => c.name).join(', ')}...).`);
     }
 
     await conv.save();

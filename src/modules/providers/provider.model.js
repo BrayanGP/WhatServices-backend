@@ -16,7 +16,8 @@ const providerSchema = new mongoose.Schema({
   description: { type: String },
   categories: [String],
   specialties: [String],
-  photos: [{ url: String, publicId: String }],
+  profilePhoto: { url: String, publicId: String }, // foto que se muestra en el catalogo de WhatsApp
+  photos: [{ url: String, publicId: String }],      // galeria de trabajos
   availability: {
     type: String,
     enum: ['available', 'busy', 'inactive'],

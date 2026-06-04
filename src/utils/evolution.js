@@ -32,6 +32,14 @@ const sendText = async (number, text, instance = EVOLUTION_INSTANCE) => {
   return ok;
 };
 
+const sendMedia = async (number, mediaUrl, caption = '', instance = EVOLUTION_INSTANCE) => {
+  const { ok } = await evoFetch(`/message/sendMedia/${instance}`, {
+    method: 'POST',
+    body: { number, mediatype: 'image', media: mediaUrl, caption },
+  });
+  return ok;
+};
+
 // ---- Instancias ----
 const fetchInstances = () => evoFetch('/instance/fetchInstances');
 
@@ -59,6 +67,7 @@ const setWebhook = (instance, url, events = ['MESSAGES_UPSERT']) =>
 
 module.exports = {
   sendText,
+  sendMedia,
   fetchInstances,
   createInstance,
   connectInstance,

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, list, getOne, create, update, updateAvailability, uploadPhotos } = require('./providers.controller');
+const { register, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto } = require('./providers.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 const { upload } = require('../../middleware/upload');
 
@@ -11,5 +11,6 @@ router.post('/', verifyToken, requireRole('provider'), create);
 router.put('/:id', verifyToken, requireRole('provider'), update);
 router.patch('/:id/availability', verifyToken, requireRole('provider'), updateAvailability);
 router.post('/:id/photos', verifyToken, requireRole('provider'), upload.array('photos', 5), uploadPhotos);
+router.post('/:id/profile-photo', verifyToken, requireRole('provider'), upload.single('photo'), uploadProfilePhoto);
 
 module.exports = router;
