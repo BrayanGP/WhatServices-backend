@@ -16,8 +16,15 @@ const categoryRoutes = require('./modules/categories/categories.routes');
 
 const app = express();
 
+const allowlist = [CLIENT_URL, ADMIN_URL].filter(Boolean);
 app.use(cors({
-  origin: [CLIENT_URL, ADMIN_URL],
+  origin(origin, callback) {
+    // permitir sin origin (curl, server-to-server), los dominios configurados y *.up.railway.app
+    if (!origin || allowlist.includes(origin) || /\.up\.railway\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true); // dev: permisivo (ajustar en prod real)
+  },
   credentials: true,
 }));
 

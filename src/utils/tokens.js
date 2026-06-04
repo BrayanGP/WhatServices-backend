@@ -4,7 +4,7 @@ const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../config/env');
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: NODE_ENV === 'production' ? 'none' : 'lax',
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 

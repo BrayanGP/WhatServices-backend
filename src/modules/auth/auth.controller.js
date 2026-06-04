@@ -6,7 +6,8 @@ const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env')
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: NODE_ENV === 'production',
-  sameSite: 'strict',
+  // 'none' permite enviar la cookie cross-site (front y backend en dominios distintos)
+  sameSite: NODE_ENV === 'production' ? 'none' : 'lax',
 };
 
 const signTokens = (user) => {
