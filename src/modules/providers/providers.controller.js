@@ -1,4 +1,54 @@
+const bcrypt = require('bcryptjs');
 const Provider = require('./provider.model');
+const User = require('../users/user.model');
+const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
+
+// Registro de empleado/proveedor: crea usuario role 'provider' + perfil
+const register = async (req, res, next) => {
+  try {
+    const {
+      name, email, phone, password,
+      businessName, ownerName, city, postalCode, description,
+      categories = [], specialties = [], lat, lng,
+    } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+    if (!businessName || !city) {
+      return res.status(400).json({ message: 'businessName y city son obligatorios' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ name: name || ownerName, email, phone, passwordHash, role: 'provider' });
+
+    const profile = {
+      userId: user._id,
+      businessName,
+      ownerName: ownerName || name,
+      phone,
+      city,
+      postalCode,
+      description,
+      categories,
+      specialties,
+    };
+    if (lat != null && lng != null) {
+      profile.location = { type: 'Point', coordinates: [Number(lng), Number(lat)] };
+    }
+    const provider = await Provider.create(profile);
+
+    const { accessToken, refreshToken } = signTokens(user);
+    res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
+    res.status(201).json({
+      accessToken,
+      user: { id: user._id, name: user.name, role: user.role },
+      provider,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 const list = async (req, res, next) => {
   try {
@@ -85,4 +135,4 @@ const uploadPhotos = async (req, res, next) => {
   }
 };
 
-module.exports = { list, getOne, create, update, updateAvailability, uploadPhotos };
+module.exports = { register, list, getOne, create, update, updateAvailability, uploadPhotos };

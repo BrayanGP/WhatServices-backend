@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { list, getOne, create, update, updateAvailability, uploadPhotos } = require('./providers.controller');
+const { register, list, getOne, create, update, updateAvailability, uploadPhotos } = require('./providers.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 const { upload } = require('../../middleware/upload');
 
+router.post('/register', register);
 router.get('/', list);
 router.get('/:id', getOne);
 router.post('/', verifyToken, requireRole('provider'), create);

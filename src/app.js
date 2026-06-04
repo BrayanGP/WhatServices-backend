@@ -12,6 +12,7 @@ const subscriptionRoutes = require('./modules/subscriptions/subscriptions.routes
 const adminRoutes = require('./modules/admin/admin.routes');
 const botRoutes = require('./modules/bot/bot.routes');
 const waRoutes = require('./modules/wa/wa.routes');
+const categoryRoutes = require('./modules/categories/categories.routes');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
