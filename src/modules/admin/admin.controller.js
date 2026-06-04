@@ -174,7 +174,12 @@ const replyConversation = async (req, res, next) => {
 
 // ----- WhatsApp / Instancias (Evolution) -----
 
+const { BACKEND_PUBLIC_URL } = require('../../config/env');
+
+// URL publica del backend para el webhook. Prioriza BACKEND_PUBLIC_URL porque
+// el host de la peticion puede venir del proxy del admin (dominio equivocado).
 const selfUrl = (req) => {
+  if (BACKEND_PUBLIC_URL) return BACKEND_PUBLIC_URL.replace(/\/$/, '');
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
   return `${proto}://${req.get('host')}`;
 };

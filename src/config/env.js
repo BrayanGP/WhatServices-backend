@@ -26,4 +26,6 @@ module.exports = {
   EVOLUTION_URL: process.env.EVOLUTION_URL,
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY,
   EVOLUTION_INSTANCE: process.env.EVOLUTION_INSTANCE || 'whatservices-bot',
+  // URL publica del propio backend (para registrar el webhook de Evolution)
+  BACKEND_PUBLIC_URL: process.env.BACKEND_PUBLIC_URL,
 };
