@@ -26,6 +26,8 @@ const conversationSchema = new mongoose.Schema({
   // Datos capturados del lead
   selectedService: { type: String },
   postalCode: { type: String },
+  // Solicitud actual en curso (para enlazar y actualizar)
+  currentRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'Request' },
   // Resultado de proveedores sugeridos en la ultima busqueda
   suggestedProviders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Provider' }],
   // Contexto libre

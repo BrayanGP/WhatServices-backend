@@ -336,17 +336,18 @@ const getStats = async (req, res, next) => {
     const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
     const [
-      providers, users, conversations, categories, reviews,
-      conversationsByDay, providersByDay, topServices, peakHours, topProviders,
+      providers, users, conversations, categories, reviews, requests,
+      requestsByDay, providersByDay, topServices, peakHours, topProviders,
     ] = await Promise.all([
       Provider.countDocuments(),
       User.countDocuments(),
       Conversation.countDocuments(),
       Category.countDocuments({ isActive: true }),
       Review.countDocuments(),
+      Request.countDocuments(),
 
-      // Conversaciones por dia (14d)
-      Conversation.aggregate([
+      // Solicitudes por dia (14d) — historial real
+      Request.aggregate([
         { $match: { createdAt: { $gte: since } } },
         { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: TZ } }, count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
@@ -359,17 +360,17 @@ const getStats = async (req, res, next) => {
         { $sort: { _id: 1 } },
       ]),
 
-      // Servicios mas pedidos
-      Conversation.aggregate([
-        { $match: { selectedService: { $ne: null } } },
-        { $group: { _id: '$selectedService', count: { $sum: 1 } } },
+      // Servicios mas pedidos (historial completo desde solicitudes)
+      Request.aggregate([
+        { $match: { service: { $ne: null } } },
+        { $group: { _id: '$service', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 8 },
       ]),
 
-      // Horarios pico (por hora local)
-      Conversation.aggregate([
-        { $group: { _id: { $hour: { date: '$lastActivity', timezone: TZ } }, count: { $sum: 1 } } },
+      // Horarios pico (por hora local de la solicitud)
+      Request.aggregate([
+        { $group: { _id: { $hour: { date: '$createdAt', timezone: TZ } }, count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]),
 
@@ -382,8 +383,8 @@ const getStats = async (req, res, next) => {
     ]);
 
     res.json({
-      totals: { providers, users, conversations, categories, reviews },
-      conversationsByDay,
+      totals: { providers, users, conversations, categories, reviews, requests },
+      requestsByDay,
       providersByDay,
       topServices,
       peakHours,
