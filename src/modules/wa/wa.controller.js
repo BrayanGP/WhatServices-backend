@@ -1,6 +1,7 @@
 const QRCode = require('qrcode');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
+const { CLIENT_URL } = require('../../config/env');
 
 const norm = (s) => String(s || '').toLowerCase();
 const nameOf = (i) => i.name || i.instanceName || i.instance?.instanceName || i.id;
@@ -85,4 +86,16 @@ const qr = async (req, res) => {
   }
 };
 
-module.exports = { go, qr, rate, rateQr, getActiveNumber };
+// PNG del QR de registro de empleados (apunta al front del cliente /unete)
+const qrUnete = async (req, res) => {
+  try {
+    const target = `${CLIENT_URL}/unete`;
+    res.type('png');
+    await QRCode.toFileStream(res, target, { width: 600, margin: 2 });
+  } catch (err) {
+    console.error('[wa/qrUnete]', err);
+    res.status(500).send('Error');
+  }
+};
+
+module.exports = { go, qr, qrUnete, rate, rateQr, getActiveNumber };
