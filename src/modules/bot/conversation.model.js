@@ -12,6 +12,8 @@ const messageSchema = new mongoose.Schema(
 const conversationSchema = new mongoose.Schema({
   phone: { type: String, unique: true, required: true },
   name: { type: String },
+  // Instancia de Evolution por la que entro/responde esta conversacion
+  instance: { type: String },
   // Estado de la maquina de estados del bot
   step: {
     type: String,

@@ -5,6 +5,8 @@ const {
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
+  listInstances, createInstance, connectInstance, instanceState,
+  logoutInstance, deleteInstance, setActiveInstance,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
@@ -23,5 +25,14 @@ router.get('/conversations', getConversations);
 router.get('/conversations/:id', getConversation);
 router.patch('/conversations/:id/takeover', toggleTakeover);
 router.post('/conversations/:id/reply', replyConversation);
+
+// WhatsApp / instancias
+router.get('/wa/instances', listInstances);
+router.post('/wa/instances', createInstance);
+router.get('/wa/instances/:name/connect', connectInstance);
+router.get('/wa/instances/:name/state', instanceState);
+router.delete('/wa/instances/:name/logout', logoutInstance);
+router.delete('/wa/instances/:name', deleteInstance);
+router.put('/wa/active', setActiveInstance);
 
 module.exports = router;

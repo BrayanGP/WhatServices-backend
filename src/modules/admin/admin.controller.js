@@ -2,7 +2,9 @@ const Provider = require('../providers/provider.model');
 const User = require('../users/user.model');
 const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
-const { sendText } = require('../../utils/evolution');
+const Setting = require('./setting.model');
+const evolution = require('../../utils/evolution');
+const { sendText } = evolution;
 
 const getProviders = async (req, res, next) => {
   try {
@@ -158,7 +160,7 @@ const replyConversation = async (req, res, next) => {
     const conv = await Conversation.findById(req.params.id);
     if (!conv) return res.status(404).json({ message: 'Conversation not found' });
 
-    await sendText(conv.phone, text);
+    await sendText(conv.phone, text, conv.instance);
     conv.messages.push({ from: 'agent', text, at: new Date() });
     conv.humanTakeover = true;
     conv.step = 'HUMAN';
@@ -170,9 +172,102 @@ const replyConversation = async (req, res, next) => {
   }
 };
 
+// ----- WhatsApp / Instancias (Evolution) -----
+
+const selfUrl = (req) => {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  return `${proto}://${req.get('host')}`;
+};
+
+const getActiveInstance = async () => {
+  const s = await Setting.findOne({ key: 'activeInstance' }).lean();
+  return s?.value || evolution.DEFAULT_INSTANCE;
+};
+
+const listInstances = async (req, res, next) => {
+  try {
+    const [{ data }, active] = await Promise.all([
+      evolution.fetchInstances(),
+      getActiveInstance(),
+    ]);
+    res.json({ instances: data || [], active });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createInstance = async (req, res, next) => {
+  try {
+    const { instanceName } = req.body;
+    if (!instanceName?.trim()) return res.status(400).json({ message: 'instanceName required' });
+    const { ok, data } = await evolution.createInstance(instanceName.trim());
+    if (!ok) return res.status(502).json({ message: 'Evolution error', data });
+    // Apuntar el webhook de la nueva instancia a este backend
+    await evolution.setWebhook(instanceName.trim(), `${selfUrl(req)}/api/bot/webhook`, ['MESSAGES_UPSERT']);
+    res.status(201).json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const connectInstance = async (req, res, next) => {
+  try {
+    const { data } = await evolution.connectInstance(req.params.name);
+    res.json(data); // incluye qrcode base64 / pairing code
+  } catch (err) {
+    next(err);
+  }
+};
+
+const instanceState = async (req, res, next) => {
+  try {
+    const { data } = await evolution.connectionState(req.params.name);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const logoutInstance = async (req, res, next) => {
+  try {
+    const { data } = await evolution.logoutInstance(req.params.name);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteInstance = async (req, res, next) => {
+  try {
+    const { data } = await evolution.deleteInstance(req.params.name);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const setActiveInstance = async (req, res, next) => {
+  try {
+    const { instanceName } = req.body;
+    if (!instanceName?.trim()) return res.status(400).json({ message: 'instanceName required' });
+    // Asegurar webhook apuntando al backend
+    await evolution.setWebhook(instanceName.trim(), `${selfUrl(req)}/api/bot/webhook`, ['MESSAGES_UPSERT']);
+    const s = await Setting.findOneAndUpdate(
+      { key: 'activeInstance' },
+      { value: instanceName.trim() },
+      { upsert: true, new: true }
+    );
+    res.json({ active: s.value });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getProviders, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
+  listInstances, createInstance, connectInstance, instanceState,
+  logoutInstance, deleteInstance, setActiveInstance,
 };

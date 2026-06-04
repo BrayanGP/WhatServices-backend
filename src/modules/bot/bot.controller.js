@@ -60,7 +60,7 @@ const saveMsg = (conv, from, text) => {
 
 const reply = async (conv, phone, text) => {
   saveMsg(conv, 'bot', text);
-  await sendText(phone, text);
+  await sendText(phone, text, conv.instance);
 };
 
 // ----- Webhook verification (compat) -----
@@ -78,10 +78,12 @@ const handleIncoming = async (req, res) => {
     if (!msg || msg.fromMe || !msg.text) return;
 
     const { phone, text, name } = msg;
+    const instance = req.body?.instance; // instancia por la que entro el mensaje
 
     let conv = await Conversation.findOne({ phone });
-    if (!conv) conv = await Conversation.create({ phone, name });
+    if (!conv) conv = await Conversation.create({ phone, name, instance });
     if (name && !conv.name) conv.name = name;
+    if (instance) conv.instance = instance; // por si cambio de instancia
     conv.lastActivity = new Date();
     saveMsg(conv, 'client', text);
 
