@@ -7,6 +7,12 @@ const providerSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   address: { type: String },
   city: { type: String, required: true },
+  postalCode: { type: String, index: true },
+  // GeoJSON Point [lng, lat] para busqueda por cercania ($near)
+  location: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], default: undefined }, // [lng, lat]
+  },
   description: { type: String },
   categories: [String],
   specialties: [String],
@@ -37,5 +43,8 @@ const providerSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   isBlocked: { type: Boolean, default: false },
 }, { timestamps: true });
+
+// Indice geoespacial para busquedas por cercania
+providerSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Provider', providerSchema);

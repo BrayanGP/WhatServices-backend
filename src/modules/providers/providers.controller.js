@@ -2,10 +2,11 @@ const Provider = require('./provider.model');
 
 const list = async (req, res, next) => {
   try {
-    const { category, city, availability, page = 1, limit = 10 } = req.query;
+    const { category, city, availability, cp, page = 1, limit = 10 } = req.query;
     const filter = { isBlocked: false };
     if (category) filter.categories = category;
     if (city) filter.city = new RegExp(city, 'i');
+    if (cp) filter.postalCode = cp;
     if (availability) filter.availability = availability;
 
     const skip = (Number(page) - 1) * Number(limit);

@@ -4,6 +4,7 @@ const {
   getProviders, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
+  getConversations, getConversation, toggleTakeover, replyConversation,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
@@ -17,5 +18,10 @@ router.patch('/users/:id/block', toggleBlockUser);
 router.get('/categories', getCategories);
 router.post('/categories', createCategory);
 router.put('/categories/:id', updateCategory);
+
+router.get('/conversations', getConversations);
+router.get('/conversations/:id', getConversation);
+router.patch('/conversations/:id/takeover', toggleTakeover);
+router.post('/conversations/:id/reply', replyConversation);
 
 module.exports = router;

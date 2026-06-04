@@ -22,4 +22,8 @@ module.exports = {
   WA_VERIFY_TOKEN: process.env.WA_VERIFY_TOKEN || 'verify_token',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   ADMIN_URL: process.env.ADMIN_URL || 'http://localhost:5174',
+  // Evolution API (microservicio WhatsApp)
+  EVOLUTION_URL: process.env.EVOLUTION_URL,
+  EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY,
+  EVOLUTION_INSTANCE: process.env.EVOLUTION_INSTANCE || 'whatservices-bot',
 };
