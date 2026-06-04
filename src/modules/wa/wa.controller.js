@@ -1,5 +1,7 @@
 const QRCode = require('qrcode');
 const Setting = require('../admin/setting.model');
+const Provider = require('../providers/provider.model');
+const Request = require('../requests/request.model');
 const evolution = require('../../utils/evolution');
 const { CLIENT_URL } = require('../../config/env');
 
@@ -98,4 +100,38 @@ const qrUnete = async (req, res) => {
   }
 };
 
-module.exports = { go, qr, qrUnete, rate, rateQr, getActiveNumber };
+// El cliente eligió un proveedor desde el catálogo del bot.
+// Registra la elección en la solicitud y redirige al WhatsApp del proveedor.
+const choose = async (req, res) => {
+  try {
+    const { requestId, providerId } = req.params;
+    const provider = await Provider.findById(providerId).lean();
+    if (!provider) return res.status(404).send('Proveedor no encontrado');
+
+    try {
+      const r = await Request.findById(requestId);
+      if (r) {
+        r.assignedProvider = providerId;
+        if (r.status === 'nueva') r.status = 'asignada';
+        r.statusHistory.push({
+          status: 'asignada',
+          note: `El cliente eligió a ${provider.businessName}`,
+          at: new Date(),
+        });
+        await r.save();
+      }
+    } catch (e) {
+      console.error('[wa/choose] no se pudo registrar:', e.message);
+    }
+
+    const d = String(provider.phone || '').replace(/\D/g, '');
+    const number = d.length === 10 ? `52${d}` : d;
+    const text = encodeURIComponent('Hola, te contacto desde WhatServices 👋');
+    return res.redirect(302, `https://wa.me/${number}?text=${text}`);
+  } catch (err) {
+    console.error('[wa/choose]', err);
+    res.status(500).send('Error');
+  }
+};
+
+module.exports = { go, qr, qrUnete, rate, rateQr, choose, getActiveNumber };

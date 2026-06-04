@@ -6,7 +6,7 @@ const Review = require('../reviews/review.model');
 const BotConfig = require('./botconfig.model');
 const Request = require('../requests/request.model');
 const { sendText, sendMedia } = require('../../utils/evolution');
-const { CLIENT_URL } = require('../../config/env');
+const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 
 // Retraso humano entre mensajes para evitar baneos (configurable)
 const REPLY_DELAY_MS = parseInt(process.env.BOT_REPLY_DELAY_MS) || 2500;
@@ -117,11 +117,16 @@ const reply = async (conv, phone, text) => {
 const sendCatalog = async (conv, phone, providers, service, cp) => {
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];
+    // Link de contacto: pasa por el backend para registrar la eleccion del cliente,
+    // luego redirige al WhatsApp del proveedor. Fallback: wa.me directo.
+    const contact = (BACKEND_PUBLIC_URL && conv.currentRequestId)
+      ? `${BACKEND_PUBLIC_URL.replace(/\/$/, '')}/wa/choose/${conv.currentRequestId}/${p._id}`
+      : `https://wa.me/${waNumber(p.phone)}`;
     const caption =
       `*${i + 1}. ${p.businessName}*\n` +
       `⭐ ${p.rating?.average || 0}/5 (${p.rating?.count || 0})` +
       `${p.city ? ` · ${p.city}` : ''}\n` +
-      `💬 Contactar: https://wa.me/${waNumber(p.phone)}`;
+      `💬 Contactar: ${contact}`;
     if (p.profilePhoto?.url) {
       await sleep(REPLY_DELAY_MS); // retraso humano anti-baneo
       await sendMedia(phone, p.profilePhoto.url, caption, conv.instance);
