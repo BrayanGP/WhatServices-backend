@@ -3,12 +3,17 @@ const Conversation = require('./conversation.model');
 const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
 const Review = require('../reviews/review.model');
+const BotConfig = require('./botconfig.model');
 const { sendText, sendMedia } = require('../../utils/evolution');
 const { CLIENT_URL } = require('../../config/env');
 
 // Retraso humano entre mensajes para evitar baneos (configurable)
 const REPLY_DELAY_MS = parseInt(process.env.BOT_REPLY_DELAY_MS) || 2500;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Rellena placeholders {key} en las plantillas de mensajes
+const fill = (tpl, vars = {}) =>
+  String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : ''));
 
 // ----- Helpers -----
 
@@ -115,6 +120,17 @@ const handleIncoming = async (req, res) => {
 
     if (conv.humanTakeover) { await conv.save(); return; }
 
+    // ---- Configuracion del bot (on/off + horario) ----
+    const cfg = await BotConfig.getSingleton();
+    if (!cfg.enabled) { await conv.save(); return; } // bot apagado: no responde
+
+    if (!cfg.isOpenNow()) {
+      await reply(conv, phone, fill(cfg.messages.outOfHours, { open: cfg.hours.openHour, close: cfg.hours.closeHour }));
+      conv.step = 'END';
+      await conv.save();
+      return;
+    }
+
     const lower = text.toLowerCase();
 
     // ---- Entrada de CALIFICACION (QR del empleado) ----
@@ -179,8 +195,7 @@ const handleIncoming = async (req, res) => {
     const askMode = async (serviceName) => {
       conv.selectedService = serviceName;
       conv.step = 'AWAITING_MODE';
-      await reply(conv, phone,
-        `Perfecto, *${serviceName}* ✅\n\n¿Cómo prefieres ver las recomendaciones?\n\n1️⃣ Los *5 más cercanos a ti*\n2️⃣ Los *5 mejor calificados*\n\nResponde *1* / *cerca* o *2* / *mejor*.`);
+      await reply(conv, phone, fill(cfg.messages.askMode, { service: serviceName }));
     };
 
     if (conv.step === 'IDLE' || conv.step === 'END') {
@@ -188,24 +203,23 @@ const handleIncoming = async (req, res) => {
       if (matched) await askMode(matched.name);
       else {
         conv.step = 'AWAITING_SERVICE';
-        await reply(conv, phone,
-          `¡Hola${name ? ' ' + name : ''}! 👋 Bienvenido a *WhatServices*.\n\nTe conectamos con profesionales de confianza:\n\n${servicesList}\n\n¿Qué servicio necesitas? (ej. "plomería" o "se me rompió un tubo")`);
+        await reply(conv, phone, fill(cfg.messages.welcome, { name: name || '', services: servicesList }));
       }
     } else if (conv.step === 'AWAITING_SERVICE') {
       const matched = matchCategory();
       if (matched) await askMode(matched.name);
-      else await reply(conv, phone, `No reconocí ese servicio 🤔. Elige uno:\n\n${servicesList}`);
+      else await reply(conv, phone, fill(cfg.messages.noService, { services: servicesList }));
     } else if (conv.step === 'AWAITING_MODE') {
       const wantsNear = /\b(1|cerca|cercanos|cercano|near|ubicaci)/i.test(lower);
       const wantsScore = /\b(2|mejor|mejores|calificad|score|estrella)/i.test(lower);
       if (wantsNear) {
         conv.step = 'AWAITING_ZIP';
-        await reply(conv, phone, 'Para buscar cerca de ti, dime tu *código postal* (5 dígitos).');
+        await reply(conv, phone, fill(cfg.messages.askZip));
       } else if (wantsScore) {
         const providers = await findProviders(conv.selectedService, { mode: 'score' });
         conv.suggestedProviders = providers.map((p) => p._id);
         if (!providers.length) {
-          await reply(conv, phone, `Por ahora no tengo profesionales de *${conv.selectedService}* disponibles 😕.`);
+          await reply(conv, phone, fill(cfg.messages.noResults, { service: conv.selectedService }));
           conv.step = 'END';
         } else {
           await reply(conv, phone, `Estos son los *${providers.length}* mejor calificados en *${conv.selectedService}*:`);
@@ -224,7 +238,7 @@ const handleIncoming = async (req, res) => {
         const providers = await findProviders(conv.selectedService, { mode: 'near', postalCode: cp });
         conv.suggestedProviders = providers.map((p) => p._id);
         if (!providers.length) {
-          await reply(conv, phone, `No tengo profesionales de *${conv.selectedService}* en tu zona 😕. Intenta más tarde.`);
+          await reply(conv, phone, fill(cfg.messages.noResults, { service: conv.selectedService }));
           conv.step = 'END';
         } else {
           await reply(conv, phone, `Estos son los *${providers.length}* profesionales de *${conv.selectedService}* más cercanos a ti:`);

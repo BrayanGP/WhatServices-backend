@@ -7,6 +7,7 @@ const {
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
+  getBotConfig, updateBotConfig,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
@@ -34,5 +35,9 @@ router.get('/wa/instances/:name/state', instanceState);
 router.delete('/wa/instances/:name/logout', logoutInstance);
 router.delete('/wa/instances/:name', deleteInstance);
 router.put('/wa/active', setActiveInstance);
+
+// Configuracion del bot
+router.get('/bot-config', getBotConfig);
+router.put('/bot-config', updateBotConfig);
 
 module.exports = router;

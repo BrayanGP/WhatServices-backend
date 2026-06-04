@@ -2,6 +2,7 @@ const Provider = require('../providers/provider.model');
 const User = require('../users/user.model');
 const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
+const BotConfig = require('../bot/botconfig.model');
 const Setting = require('./setting.model');
 const evolution = require('../../utils/evolution');
 const { sendText } = evolution;
@@ -268,6 +269,31 @@ const setActiveInstance = async (req, res, next) => {
   }
 };
 
+// ----- Configuracion del bot -----
+
+const getBotConfig = async (req, res, next) => {
+  try {
+    const cfg = await BotConfig.getSingleton();
+    res.json(cfg);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updateBotConfig = async (req, res, next) => {
+  try {
+    const { enabled, messages, hours } = req.body;
+    const cfg = await BotConfig.getSingleton();
+    if (enabled !== undefined) cfg.enabled = enabled;
+    if (messages) cfg.messages = { ...cfg.messages.toObject(), ...messages };
+    if (hours) cfg.hours = { ...cfg.hours.toObject(), ...hours };
+    await cfg.save();
+    res.json(cfg);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getProviders, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
@@ -275,4 +301,5 @@ module.exports = {
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
+  getBotConfig, updateBotConfig,
 };
