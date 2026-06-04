@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { register, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto } = require('./providers.controller');
+const { register, getMine, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto } = require('./providers.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 const { upload } = require('../../middleware/upload');
 
 router.post('/register', register);
 router.get('/', list);
+router.get('/me', verifyToken, requireRole('provider'), getMine);
 router.get('/:id', getOne);
 router.post('/', verifyToken, requireRole('provider'), create);
 router.put('/:id', verifyToken, requireRole('provider'), update);

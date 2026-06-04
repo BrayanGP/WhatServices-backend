@@ -70,6 +70,16 @@ const list = async (req, res, next) => {
   }
 };
 
+const getMine = async (req, res, next) => {
+  try {
+    const provider = await Provider.findOne({ userId: req.user.id }).lean();
+    if (!provider) return res.status(404).json({ message: 'No tienes perfil de proveedor' });
+    res.json(provider);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const getOne = async (req, res, next) => {
   try {
     const provider = await Provider.findById(req.params.id).lean();
@@ -150,4 +160,4 @@ const uploadProfilePhoto = async (req, res, next) => {
   }
 };
 
-module.exports = { register, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto };
+module.exports = { register, getMine, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto };
