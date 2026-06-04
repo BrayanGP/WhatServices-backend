@@ -269,6 +269,74 @@ const setActiveInstance = async (req, res, next) => {
   }
 };
 
+// ----- Dashboard / Estadisticas -----
+
+const Review = require('../reviews/review.model');
+const TZ = 'America/Mexico_City';
+
+const getStats = async (req, res, next) => {
+  try {
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+    const [
+      providers, users, conversations, categories, reviews,
+      conversationsByDay, providersByDay, topServices, peakHours, topProviders,
+    ] = await Promise.all([
+      Provider.countDocuments(),
+      User.countDocuments(),
+      Conversation.countDocuments(),
+      Category.countDocuments({ isActive: true }),
+      Review.countDocuments(),
+
+      // Conversaciones por dia (14d)
+      Conversation.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: TZ } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+
+      // Profesionales nuevos por dia (14d)
+      Provider.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: TZ } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+
+      // Servicios mas pedidos
+      Conversation.aggregate([
+        { $match: { selectedService: { $ne: null } } },
+        { $group: { _id: '$selectedService', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 8 },
+      ]),
+
+      // Horarios pico (por hora local)
+      Conversation.aggregate([
+        { $group: { _id: { $hour: { date: '$lastActivity', timezone: TZ } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+
+      // Mejores profesionales por rating
+      Provider.find({ 'rating.count': { $gt: 0 } })
+        .sort({ 'rating.average': -1, 'rating.count': -1 })
+        .limit(5)
+        .select('businessName city rating categories')
+        .lean(),
+    ]);
+
+    res.json({
+      totals: { providers, users, conversations, categories, reviews },
+      conversationsByDay,
+      providersByDay,
+      topServices,
+      peakHours,
+      topProviders,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ----- Configuracion del bot -----
 
 const getBotConfig = async (req, res, next) => {
@@ -302,4 +370,5 @@ module.exports = {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
+  getStats,
 };

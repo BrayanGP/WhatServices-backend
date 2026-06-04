@@ -8,6 +8,7 @@ const {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
+  getStats,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
@@ -35,6 +36,9 @@ router.get('/wa/instances/:name/state', instanceState);
 router.delete('/wa/instances/:name/logout', logoutInstance);
 router.delete('/wa/instances/:name', deleteInstance);
 router.put('/wa/active', setActiveInstance);
+
+// Dashboard
+router.get('/stats', getStats);
 
 // Configuracion del bot
 router.get('/bot-config', getBotConfig);
