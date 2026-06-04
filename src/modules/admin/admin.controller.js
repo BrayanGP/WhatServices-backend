@@ -3,6 +3,7 @@ const User = require('../users/user.model');
 const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
 const BotConfig = require('../bot/botconfig.model');
+const Request = require('../requests/request.model');
 const Setting = require('./setting.model');
 const evolution = require('../../utils/evolution');
 const { sendText } = evolution;
@@ -269,6 +270,62 @@ const setActiveInstance = async (req, res, next) => {
   }
 };
 
+// ----- Solicitudes -----
+
+const getRequests = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, status, service } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    if (service) filter.service = service;
+    const skip = (Number(page) - 1) * Number(limit);
+    const [requests, total] = await Promise.all([
+      Request.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate('assignedProvider', 'businessName phone')
+        .lean(),
+      Request.countDocuments(filter),
+    ]);
+    res.json({ requests, total });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getRequest = async (req, res, next) => {
+  try {
+    const request = await Request.findById(req.params.id)
+      .populate('suggestedProviders', 'businessName phone city rating')
+      .populate('assignedProvider', 'businessName phone city rating')
+      .lean();
+    if (!request) return res.status(404).json({ message: 'Request not found' });
+    res.json(request);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updateRequest = async (req, res, next) => {
+  try {
+    const { status, assignedProvider, note } = req.body;
+    const request = await Request.findById(req.params.id);
+    if (!request) return res.status(404).json({ message: 'Request not found' });
+
+    if (assignedProvider !== undefined) request.assignedProvider = assignedProvider || null;
+    if (status && status !== request.status) {
+      request.status = status;
+    }
+    request.statusHistory.push({ status: request.status, note: note || '', at: new Date() });
+    await request.save();
+    const populated = await request.populate('assignedProvider', 'businessName phone');
+    res.json(populated);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ----- Dashboard / Estadisticas -----
 
 const Review = require('../reviews/review.model');
@@ -371,4 +428,5 @@ module.exports = {
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
   getStats,
+  getRequests, getRequest, updateRequest,
 };

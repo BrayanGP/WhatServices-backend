@@ -4,6 +4,7 @@ const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
 const Review = require('../reviews/review.model');
 const BotConfig = require('./botconfig.model');
+const Request = require('../requests/request.model');
 const { sendText, sendMedia } = require('../../utils/evolution');
 const { CLIENT_URL } = require('../../config/env');
 
@@ -67,6 +68,25 @@ const findProviders = async (service, { mode, postalCode } = {}) => {
 };
 
 const saveMsg = (conv, from, text) => conv.messages.push({ from, text, at: new Date() });
+
+// Registra una solicitud cuando el bot entrega recomendaciones
+const createRequest = async (conv, providers, mode) => {
+  try {
+    await Request.create({
+      conversationId: conv._id,
+      phone: conv.phone,
+      name: conv.name,
+      service: conv.selectedService,
+      postalCode: conv.postalCode,
+      mode,
+      suggestedProviders: providers.map((p) => p._id),
+      status: 'nueva',
+      statusHistory: [{ status: 'nueva', at: new Date() }],
+    });
+  } catch (err) {
+    console.error('[Bot] No se pudo crear solicitud:', err.message);
+  }
+};
 
 const reply = async (conv, phone, text) => {
   await sleep(REPLY_DELAY_MS); // retraso humano anti-baneo
@@ -224,6 +244,7 @@ const handleIncoming = async (req, res) => {
         } else {
           await reply(conv, phone, `Estos son los *${providers.length}* mejor calificados en *${conv.selectedService}*:`);
           await sendCatalog(conv, phone, providers, conv.selectedService, null);
+          await createRequest(conv, providers, 'score');
           conv.step = 'SHOWING_RESULTS';
         }
       } else {
@@ -243,6 +264,7 @@ const handleIncoming = async (req, res) => {
         } else {
           await reply(conv, phone, `Estos son los *${providers.length}* profesionales de *${conv.selectedService}* más cercanos a ti:`);
           await sendCatalog(conv, phone, providers, conv.selectedService, cp);
+          await createRequest(conv, providers, 'near');
           conv.step = 'SHOWING_RESULTS';
         }
       }

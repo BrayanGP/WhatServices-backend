@@ -9,6 +9,7 @@ const {
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
   getStats,
+  getRequests, getRequest, updateRequest,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
@@ -36,6 +37,11 @@ router.get('/wa/instances/:name/state', instanceState);
 router.delete('/wa/instances/:name/logout', logoutInstance);
 router.delete('/wa/instances/:name', deleteInstance);
 router.put('/wa/active', setActiveInstance);
+
+// Solicitudes
+router.get('/requests', getRequests);
+router.get('/requests/:id', getRequest);
+router.patch('/requests/:id', updateRequest);
 
 // Dashboard
 router.get('/stats', getStats);
