@@ -6,6 +6,10 @@ const Review = require('../reviews/review.model');
 const { sendText, sendMedia } = require('../../utils/evolution');
 const { CLIENT_URL } = require('../../config/env');
 
+// Retraso humano entre mensajes para evitar baneos (configurable)
+const REPLY_DELAY_MS = parseInt(process.env.BOT_REPLY_DELAY_MS) || 2500;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // ----- Helpers -----
 
 const extractIncoming = (req) => {
@@ -60,6 +64,7 @@ const findProviders = async (service, { mode, postalCode } = {}) => {
 const saveMsg = (conv, from, text) => conv.messages.push({ from, text, at: new Date() });
 
 const reply = async (conv, phone, text) => {
+  await sleep(REPLY_DELAY_MS); // retraso humano anti-baneo
   saveMsg(conv, 'bot', text);
   await sendText(phone, text, conv.instance);
 };
@@ -74,6 +79,7 @@ const sendCatalog = async (conv, phone, providers, service, cp) => {
       `⭐ ${p.rating?.average || 0}/5 (${p.rating?.count || 0})` +
       `${p.city ? ` · ${p.city}` : ''}`;
     if (p.profilePhoto?.url) {
+      await sleep(REPLY_DELAY_MS); // retraso humano anti-baneo
       await sendMedia(phone, p.profilePhoto.url, caption, conv.instance);
       saveMsg(conv, 'bot', `[foto] ${caption}`);
     } else {
