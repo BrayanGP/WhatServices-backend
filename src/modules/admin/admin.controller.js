@@ -334,10 +334,14 @@ const TZ = 'America/Mexico_City';
 const getStats = async (req, res, next) => {
   try {
     const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
 
     const [
       providers, users, conversations, categories, reviews, requests,
       requestsByDay, providersByDay, topServices, peakHours, topProviders,
+      // operativos
+      newRequests, requestsToday, pendingProviders, humanConversations,
+      recentRequests, pendingProvidersList, messagesTodayAgg,
     ] = await Promise.all([
       Provider.countDocuments(),
       User.countDocuments(),
@@ -374,13 +378,46 @@ const getStats = async (req, res, next) => {
         { $sort: { _id: 1 } },
       ]),
 
-      // Mejores profesionales por rating
+      // Ranking de profesionales por rating
       Provider.find({ 'rating.count': { $gt: 0 } })
         .sort({ 'rating.average': -1, 'rating.count': -1 })
-        .limit(5)
+        .limit(8)
         .select('businessName city rating categories')
         .lean(),
+
+      // --- Operativos ---
+      Request.countDocuments({ status: 'nueva' }),
+      Request.countDocuments({ createdAt: { $gte: startOfDay } }),
+      Provider.countDocuments({ isVerified: false, isBlocked: false }),
+      Conversation.countDocuments({ humanTakeover: true }),
+
+      // Bandeja: ultimas solicitudes con su proveedor elegido
+      Request.find()
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .populate('assignedProvider', 'businessName')
+        .select('name phone service status assignedProvider createdAt')
+        .lean(),
+
+      // Profesionales por aprobar
+      Provider.find({ isVerified: false, isBlocked: false })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .select('businessName categories city')
+        .lean(),
+
+      // Mensajes de hoy (todas las conversaciones)
+      Conversation.aggregate([
+        { $unwind: '$messages' },
+        { $match: { 'messages.at': { $gte: startOfDay } } },
+        { $count: 'count' },
+      ]),
     ]);
+
+    const messagesToday = messagesTodayAgg[0]?.count || 0;
+    const botResolvedPct = conversations > 0
+      ? Math.round(((conversations - humanConversations) / conversations) * 100)
+      : 0;
 
     res.json({
       totals: { providers, users, conversations, categories, reviews, requests },
@@ -389,6 +426,16 @@ const getStats = async (req, res, next) => {
       topServices,
       peakHours,
       topProviders,
+      ops: {
+        newRequests,
+        requestsToday,
+        pendingProviders,
+        humanConversations,
+        messagesToday,
+        botResolvedPct,
+        recentRequests,
+        pendingProvidersList,
+      },
     });
   } catch (err) {
     next(err);
