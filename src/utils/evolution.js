@@ -23,22 +23,25 @@ const evoFetch = async (path, { method = 'GET', body } = {}) => {
   }
 };
 
-// ---- Mensajes ----
-const sendText = async (number, text, instance = EVOLUTION_INSTANCE) => {
-  const { ok } = await evoFetch(`/message/sendText/${instance}`, {
-    method: 'POST',
-    body: { number, text },
-  });
-  return ok;
+// Reintenta el POST si falla (el PRIMER envío a un contacto nuevo a veces falla
+// porque la sesión de WhatsApp aún no está lista → por eso "había que mandar 2 mensajes").
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const evoPost = async (path, body, tries = 3, gap = 1500) => {
+  let res = await evoFetch(path, { method: 'POST', body });
+  for (let i = 1; i < tries && !res.ok; i += 1) {
+    await sleep(gap);
+    res = await evoFetch(path, { method: 'POST', body });
+  }
+  if (!res.ok) console.error('[Evolution] envío falló tras', tries, 'intentos:', path);
+  return res.ok;
 };
 
-const sendMedia = async (number, mediaUrl, caption = '', instance = EVOLUTION_INSTANCE) => {
-  const { ok } = await evoFetch(`/message/sendMedia/${instance}`, {
-    method: 'POST',
-    body: { number, mediatype: 'image', media: mediaUrl, caption },
-  });
-  return ok;
-};
+// ---- Mensajes ----
+const sendText = async (number, text, instance = EVOLUTION_INSTANCE) =>
+  evoPost(`/message/sendText/${instance}`, { number, text });
+
+const sendMedia = async (number, mediaUrl, caption = '', instance = EVOLUTION_INSTANCE) =>
+  evoPost(`/message/sendMedia/${instance}`, { number, mediatype: 'image', media: mediaUrl, caption });
 
 // Botones interactivos (reply buttons). Devuelve true si Evolution lo aceptó.
 // El llamador SIEMPRE debe tener un fallback de texto por si el dispositivo no los renderiza.
