@@ -1,17 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const Category = require('../admin/category.model');
-const { verifyToken } = require('../../middleware/auth');
 
 const slugify = (str) =>
   str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-// Público: lista de categorías aprobadas (para registro y filtros del cliente)
+// Público: lista de categorías aprobadas
+// Incluye docs sin campo status (retrocompatibilidad con datos previos a la migración)
 router.get('/', async (req, res, next) => {
   try {
     const categories = await Category
-      .find({ isActive: true, status: 'active' })
+      .find({ isActive: true, $or: [{ status: 'active' }, { status: { $exists: false } }] })
       .select('name slug icon')
       .sort({ name: 1 })
       .lean();
@@ -21,8 +21,8 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// Proveedor: sugerir una nueva categoría (queda en status 'pending')
-router.post('/suggest', verifyToken, async (req, res, next) => {
+// Público: sugerir una nueva categoría (queda en status 'pending', sin necesidad de token)
+router.post('/suggest', async (req, res, next) => {
   try {
     const { name, icon } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: 'El nombre es obligatorio' });
@@ -40,7 +40,6 @@ router.post('/suggest', verifyToken, async (req, res, next) => {
       icon: icon?.trim() || '🔧',
       isActive: false,
       status: 'pending',
-      suggestedBy: req.user.id,
     });
 
     res.status(201).json({

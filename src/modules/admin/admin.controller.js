@@ -5,6 +5,7 @@ const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
 const BotConfig = require('../bot/botconfig.model');
 const Intent = require('../bot/intent.model');
+const BotFlow = require('../bot/botflow.model');
 const Request = require('../requests/request.model');
 const Role = require('./role.model');
 const Setting = require('./setting.model');
@@ -646,6 +647,59 @@ const deleteIntent = async (req, res, next) => {
   }
 };
 
+// ----- Flujo visual del bot (constructor drag-and-drop) -----
+
+const getFlow = async (req, res, next) => {
+  try {
+    const doc = await BotFlow.getSingleton();
+    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const saveFlow = async (req, res, next) => {
+  try {
+    const { nodes = [], edges = [] } = req.body || {};
+    const doc = await BotFlow.getSingleton();
+    doc.draft = { nodes, edges };
+    await doc.save();
+    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const publishFlow = async (req, res, next) => {
+  try {
+    const { nodes, edges } = req.body || {};
+    const doc = await BotFlow.getSingleton();
+    // Si mandan grafo en el body, se guarda como borrador antes de publicar
+    if (Array.isArray(nodes) && Array.isArray(edges)) doc.draft = { nodes, edges };
+    if (!(doc.draft.nodes || []).some((n) => n.type === 'start')) {
+      return res.status(400).json({ message: 'El flujo necesita un nodo de inicio (start) para publicarse.' });
+    }
+    doc.published = { nodes: doc.draft.nodes, edges: doc.draft.edges };
+    doc.isPublished = true;
+    doc.version = (doc.version || 0) + 1;
+    await doc.save();
+    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const unpublishFlow = async (req, res, next) => {
+  try {
+    const doc = await BotFlow.getSingleton();
+    doc.isPublished = false;
+    await doc.save();
+    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ----- Roles y módulos -----
 
 const getModules = async (req, res, next) => {
@@ -709,6 +763,7 @@ module.exports = {
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
   getIntents, createIntent, updateIntent, deleteIntent,
+  getFlow, saveFlow, publishFlow, unpublishFlow,
   getStats,
   getRequests, getRequest, updateRequest,
 };

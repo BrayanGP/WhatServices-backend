@@ -9,6 +9,7 @@ const {
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
   getIntents, createIntent, updateIntent, deleteIntent,
+  getFlow, saveFlow, publishFlow, unpublishFlow,
   getStats,
   getRequests, getRequest, updateRequest,
   createUser, updateUserRole, resetUserPassword,
@@ -75,5 +76,11 @@ router.get('/bot/intents', getIntents);
 router.post('/bot/intents', createIntent);
 router.put('/bot/intents/:id', updateIntent);
 router.delete('/bot/intents/:id', deleteIntent);
+
+// Flujo visual del bot (constructor drag-and-drop)
+router.get('/bot/flow', getFlow);
+router.put('/bot/flow', saveFlow);
+router.post('/bot/flow/publish', publishFlow);
+router.post('/bot/flow/unpublish', unpublishFlow);
 
 module.exports = router;
