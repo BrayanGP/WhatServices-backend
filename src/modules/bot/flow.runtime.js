@@ -209,7 +209,12 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   const dateStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, dateStyle: 'long' }).format(now);
   const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now);
 
+  // Variables propias definidas por el usuario (base, sobre-escribibles por las del sistema/capturadas)
+  const customVars = {};
+  (cfg.variables || []).forEach((v) => { if (v && v.key) customVars[v.key] = v.value; });
+
   const fillVars = () => ({
+    ...customVars,
     name: ctx.name, firstName, phone: ctx.phone, greeting,
     service: ctx.service || '', cp: ctx.cp || '',
     count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
