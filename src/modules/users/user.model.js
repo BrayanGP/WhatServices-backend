@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema({
   roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
   avatar: { url: String, publicId: String },
   isBlocked: { type: Boolean, default: false },
+  // Restablecimiento de contraseña por código (WhatsApp)
+  resetCode: { type: String },
+  resetCodeExpires: { type: Date },
+  resetCodeAttempts: { type: Number, default: 0 },
 }, { timestamps: true });
 
 userSchema.methods.comparePassword = function (password) {

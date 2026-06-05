@@ -3,7 +3,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const { PORT, CLIENT_URL, ADMIN_URL, API_KEY } = require('./config/env');
+const { PORT, CLIENT_URL, ADMIN_URL, API_KEY, BACKEND_PUBLIC_URL } = require('./config/env');
 const errorHandler = require('./middleware/errorHandler');
 
 const authRoutes = require('./modules/auth/auth.routes');
@@ -21,11 +21,11 @@ const app = express();
 const allowlist = [CLIENT_URL, ADMIN_URL].filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
-    // permitir sin origin (curl, server-to-server), los dominios configurados y *.up.railway.app
+    // permitir sin origin (curl, server-to-server, apps móviles), los dominios configurados y *.up.railway.app
     if (!origin || allowlist.includes(origin) || /\.up\.railway\.app$/.test(origin)) {
       return callback(null, true);
     }
-    return callback(null, true); // dev: permisivo (ajustar en prod real)
+    return callback(null, false); // origen no permitido → el navegador bloquea
   },
   credentials: true,
 }));
@@ -69,6 +69,11 @@ app.use(errorHandler);
 connectDB()
   .then(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    // Keep-alive: evita que el servicio se duerma por inactividad (causa de "no contesta al primer mensaje").
+    if (BACKEND_PUBLIC_URL && process.env.KEEP_ALIVE !== 'false') {
+      const url = `${BACKEND_PUBLIC_URL.replace(/\/$/, '')}/health`;
+      setInterval(() => { fetch(url).catch(() => {}); }, 4 * 60 * 1000);
+    }
   })
   .catch((err) => {
     console.error('Failed to connect to MongoDB:', err.message);
