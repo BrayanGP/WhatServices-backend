@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, refresh, logout, me, updateProfile, changePassword, uploadAvatar } = require('./auth.controller');
+const { register, login, refresh, logout, me, updateProfile, changePassword, uploadAvatar, forgotPassword, resetPassword } = require('./auth.controller');
 const { verifyToken } = require('../../middleware/auth');
 const { upload, withFolder } = require('../../middleware/upload');
 
@@ -8,6 +8,10 @@ router.post('/register', register);
 router.post('/login', login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
+
+// Restablecer contraseña por código de WhatsApp (público)
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 // Cuenta personal (cualquier usuario autenticado)
 router.get('/me', verifyToken, me);
