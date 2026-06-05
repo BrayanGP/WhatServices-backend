@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const Provider = require('../providers/provider.model');
 const User = require('../users/user.model');
 const Category = require('./category.model');
@@ -10,21 +11,46 @@ const { sendText } = evolution;
 
 const getProviders = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, city, isVerified, isBlocked } = req.query;
+    const { page = 1, limit = 20, city, category, q, isVerified, isBlocked } = req.query;
     const filter = {};
     if (city) filter.city = new RegExp(city, 'i');
+    if (category) filter.categories = category; // filtro por giro
     if (isVerified !== undefined) filter.isVerified = isVerified === 'true';
     if (isBlocked !== undefined) filter.isBlocked = isBlocked === 'true';
+    if (q) {
+      const rx = new RegExp(q, 'i');
+      filter.$or = [{ businessName: rx }, { ownerName: rx }, { phone: rx }];
+    }
     const skip = (Number(page) - 1) * Number(limit);
     const [providers, total] = await Promise.all([
       Provider.find(filter)
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
-        .populate('userId', 'name email')
+        .populate('userId', 'name email phone')
         .lean(),
       Provider.countDocuments(filter),
     ]);
     res.json({ providers, total });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Reinicia la contraseña del proveedor (solo admin/BD). Devuelve la nueva para compartirla.
+const resetProviderPassword = async (req, res, next) => {
+  try {
+    const provider = await Provider.findById(req.params.id).lean();
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    if (!provider.userId) return res.status(400).json({ message: 'Este proveedor no tiene cuenta de acceso' });
+
+    // Contraseña legible: Ws + 6 alfanum + símbolo
+    const rnd = Math.random().toString(36).slice(-6);
+    const newPassword = `Ws${rnd}!`;
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await User.findByIdAndUpdate(provider.userId, { passwordHash });
+
+    res.json({ password: newPassword });
   } catch (err) {
     next(err);
   }
@@ -468,7 +494,7 @@ const updateBotConfig = async (req, res, next) => {
 };
 
 module.exports = {
-  getProviders, toggleVerify, toggleBlockProvider,
+  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,

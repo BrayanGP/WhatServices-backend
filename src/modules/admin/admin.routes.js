@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getProviders, toggleVerify, toggleBlockProvider,
+  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
@@ -16,6 +16,7 @@ const { verifyToken, requireRole } = require('../../middleware/auth');
 router.use(verifyToken, requireRole('admin'));
 
 router.get('/providers', getProviders);
+router.patch('/providers/:id/reset-password', resetProviderPassword);
 router.patch('/providers/:id/verify', toggleVerify);
 router.patch('/providers/:id/block', toggleBlockProvider);
 router.get('/users', getUsers);
