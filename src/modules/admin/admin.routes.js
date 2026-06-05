@@ -10,6 +10,7 @@ const {
   getBotConfig, updateBotConfig,
   getIntents, createIntent, updateIntent, deleteIntent,
   getFlow, saveFlow, publishFlow, unpublishFlow,
+  getFlowTemplates, createFlowTemplate, deleteFlowTemplate,
   getStats,
   getRequests, getRequest, updateRequest,
   createUser, updateUserRole, resetUserPassword,
@@ -82,5 +83,10 @@ router.get('/bot/flow', getFlow);
 router.put('/bot/flow', saveFlow);
 router.post('/bot/flow/publish', publishFlow);
 router.post('/bot/flow/unpublish', unpublishFlow);
+
+// Plantillas de flujo propias
+router.get('/bot/flow-templates', getFlowTemplates);
+router.post('/bot/flow-templates', createFlowTemplate);
+router.delete('/bot/flow-templates/:id', deleteFlowTemplate);
 
 module.exports = router;
