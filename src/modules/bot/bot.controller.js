@@ -42,26 +42,57 @@ const getRateProviderId = (text) => {
   return m ? m[1] : null;
 };
 
+// Reinicia el flujo si pasaron mas de 5 min sin actividad (conversacion "expirada")
+const SESSION_TTL_MS = parseInt(process.env.BOT_SESSION_TTL_MS) || 5 * 60 * 1000;
+
+// ----- Cola por conversación -----
+// Serializa el procesamiento por número: si llegan mensajes al mismo tiempo,
+// se atienden de uno en uno (evita choques al guardar la misma conversación).
+const queues = new Map();
+const enqueue = (phone, task) => {
+  const prev = queues.get(phone) || Promise.resolve();
+  const next = prev.then(task, task).finally(() => { if (queues.get(phone) === next) queues.delete(phone); });
+  queues.set(phone, next);
+  return next;
+};
+
 // ----- Webhook -----
 const verifyWebhook = (req, res) => res.sendStatus(200);
 
-const handleIncoming = async (req, res) => {
+const handleIncoming = (req, res) => {
   res.sendStatus(200);
-
   try {
     const event = req.body?.event;
     if (event && !['messages.upsert', 'MESSAGES_UPSERT'].includes(event)) return;
-
     const msg = extractIncoming(req);
     if (!msg || msg.fromMe || !msg.text) return;
-
-    const { phone, text, name } = msg;
     const instance = req.body?.instance;
+    // encolar por número → cada conversación se procesa a su tiempo
+    enqueue(msg.phone, () => processIncoming(msg, instance));
+  } catch (err) {
+    console.error('[Bot] Error encolando:', err);
+  }
+};
+
+const processIncoming = async (msg, instance) => {
+  try {
+    const { phone, text, name } = msg;
 
     let conv = await Conversation.findOne({ phone });
     if (!conv) conv = await Conversation.create({ phone, name, instance });
     if (name && !conv.name) conv.name = name;
     if (instance) conv.instance = instance;
+
+    // Reinicio por inactividad: si pasaron >5 min, empezar la conversación de cero
+    const idle = conv.lastActivity ? (Date.now() - new Date(conv.lastActivity).getTime()) : 0;
+    if (idle > SESSION_TTL_MS && !['RATING_SCORE', 'RATING_COMMENT'].includes(conv.step)) {
+      conv.step = 'IDLE';
+      conv.selectedService = undefined;
+      conv.suggestedProviders = [];
+      conv.context = {};
+      conv.markModified('context');
+    }
+
     conv.lastActivity = new Date();
     saveMsg(conv, 'client', text);
 
