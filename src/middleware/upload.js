@@ -29,10 +29,11 @@ if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
     s3,
     bucket: S3_BUCKET_NAME,
     contentType: multerS3.AUTO_CONTENT_TYPE,
-    key: (_req, file, cb) => {
+    key: (req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
       const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-      cb(null, `whatservices/providers/${unique}`);
+      const folder = (req.uploadFolder || 'otros').replace(/^\/+|\/+$/g, '');
+      cb(null, `${folder}/${unique}`);
     },
   });
   storageMode = 's3';
@@ -49,11 +50,11 @@ if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
   });
   storage = new CloudinaryStorage({
     cloudinary,
-    params: {
-      folder: 'whatservices/providers',
+    params: (req, _file) => ({
+      folder: (req.uploadFolder || 'otros'),
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [{ width: 1200, crop: 'limit' }],
-    },
+    }),
   });
   storageMode = 'cloudinary';
   console.log('[upload] Modo: Cloudinary');
@@ -64,7 +65,12 @@ if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
   storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    destination: (req, _file, cb) => {
+      const folder = (req.uploadFolder || 'otros').replace(/^\/+|\/+$/g, '');
+      const dir = path.join(uploadsDir, folder);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
       const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
@@ -86,7 +92,15 @@ const upload = multer({
 
 const useCloudinary = storageMode === 'cloudinary';
 
+// Middleware: define la carpeta destino antes de subir.
+// Uso: withFolder((req) => `proveedores/${req.params.id}/trabajos`)
+const withFolder = (fn) => (req, res, next) => {
+  try { req.uploadFolder = fn(req); } catch { req.uploadFolder = 'otros'; }
+  next();
+};
+
 // URL pública de un archivo subido, según el modo de almacenamiento
+const uploadsRoot = path.join(__dirname, '../../uploads');
 const fileUrl = (file) => {
   if (storageMode === 's3') {
     const url = file.location || (S3_PUBLIC_URL ? `${S3_PUBLIC_URL.replace(/\/$/, '')}/${file.key}` : file.key);
@@ -95,8 +109,11 @@ const fileUrl = (file) => {
   if (storageMode === 'cloudinary') {
     return { url: file.path, publicId: file.filename };
   }
+  // local: reflejar subcarpeta en la URL
   const base = BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
-  return { url: `${base}/uploads/${file.filename}`, publicId: file.filename };
+  const rel = file.destination ? path.relative(uploadsRoot, file.destination).replace(/\\/g, '/') : '';
+  const sub = rel ? `${rel}/` : '';
+  return { url: `${base}/uploads/${sub}${file.filename}`, publicId: `${sub}${file.filename}` };
 };
 
-module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl };
+module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl, withFolder };
