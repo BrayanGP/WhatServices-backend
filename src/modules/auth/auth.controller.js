@@ -152,7 +152,7 @@ const forgotPassword = async (req, res, next) => {
     if (user && !user.isBlocked) {
       const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
       user.resetCode = await bcrypt.hash(code, 10);
-      user.resetCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+      user.resetCodeExpires = new Date(Date.now() + 5 * 60 * 1000);
       user.resetCodeAttempts = 0;
       await user.save();
       try {
@@ -160,7 +160,7 @@ const forgotPassword = async (req, res, next) => {
         const instance = s?.value || evolution.DEFAULT_INSTANCE;
         await evolution.sendText(
           waNumber(req.body.phone),
-          `🔐 Tu código para restablecer tu contraseña en *WhatServices* es: *${code}*\n\nVence en 10 minutos. Si no fuiste tú, ignora este mensaje.`,
+          `🔐 Tu código para restablecer tu contraseña en *WhatServices* es: *${code}*\n\nVence en 5 minutos. Si no fuiste tú, ignora este mensaje.`,
           instance,
         );
       } catch (e) { console.error('[forgotPassword] no se pudo enviar código:', e.message); }
