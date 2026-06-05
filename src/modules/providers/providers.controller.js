@@ -2,22 +2,7 @@ const bcrypt = require('bcryptjs');
 const Provider = require('./provider.model');
 const User = require('../users/user.model');
 const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
-const { storageMode } = require('../../middleware/upload');
-const { BACKEND_PUBLIC_URL, PORT, S3_PUBLIC_URL, S3_ENDPOINT, S3_BUCKET_NAME } = require('../../config/env');
-
-// Genera la URL pública de un archivo subido
-const fileUrl = (file) => {
-  if (storageMode === 's3') {
-    // multer-s3 guarda la URL completa en file.location
-    return { url: file.location, publicId: file.key };
-  }
-  if (storageMode === 'cloudinary') {
-    return { url: file.path, publicId: file.filename };
-  }
-  // Disco local
-  const base = BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
-  return { url: `${base}/uploads/${file.filename}`, publicId: file.filename };
-};
+const { fileUrl } = require('../../middleware/upload');
 
 // Registro de empleado/proveedor: crea usuario role 'provider' + perfil
 const register = async (req, res, next) => {
