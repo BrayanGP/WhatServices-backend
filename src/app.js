@@ -3,7 +3,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const { PORT, CLIENT_URL, ADMIN_URL } = require('./config/env');
+const { PORT, CLIENT_URL, ADMIN_URL, API_KEY } = require('./config/env');
 const errorHandler = require('./middleware/errorHandler');
 
 const authRoutes = require('./modules/auth/auth.routes');
@@ -41,6 +41,18 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Servir archivos subidos localmente (solo cuando Cloudinary no está configurado)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// ---- API key: protege /api cuando API_KEY está definido ----
+// Exentos: preflight CORS y webhooks server-to-server (no pueden enviar el header).
+const API_KEY_EXEMPT = ['/api/bot/webhook', '/api/subscriptions/webhook'];
+app.use((req, res, next) => {
+  if (!API_KEY) return next();                       // desactivado si no hay key
+  if (req.method === 'OPTIONS') return next();        // preflight
+  if (!req.path.startsWith('/api/')) return next();   // solo protege la API JSON
+  if (API_KEY_EXEMPT.includes(req.path)) return next();
+  if (req.get('x-api-key') === API_KEY) return next();
+  return res.status(401).json({ message: 'API key inválida o ausente' });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
