@@ -11,16 +11,22 @@ const { sendText } = evolution;
 
 const getProviders = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, city, category, q, isVerified, isBlocked } = req.query;
+    const { page = 1, limit = 20, city, category, q, loc, isVerified, isBlocked } = req.query;
     const filter = {};
     if (city) filter.city = new RegExp(city, 'i');
-    if (category) filter.categories = category; // filtro por giro
+    if (category) filter.categories = category; // filtro por giro/oficio
     if (isVerified !== undefined) filter.isVerified = isVerified === 'true';
     if (isBlocked !== undefined) filter.isBlocked = isBlocked === 'true';
+    const and = [];
     if (q) {
       const rx = new RegExp(q, 'i');
-      filter.$or = [{ businessName: rx }, { ownerName: rx }, { phone: rx }];
+      and.push({ $or: [{ businessName: rx }, { ownerName: rx }, { phone: rx }] });
     }
+    if (loc) { // filtro por domicilio o codigo postal
+      const rl = new RegExp(loc, 'i');
+      and.push({ $or: [{ address: rl }, { postalCode: rl }, { city: rl }] });
+    }
+    if (and.length) filter.$and = and;
     const skip = (Number(page) - 1) * Number(limit);
     const [providers, total] = await Promise.all([
       Provider.find(filter)
