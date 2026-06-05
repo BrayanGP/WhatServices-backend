@@ -166,7 +166,13 @@ const toggleBlockUser = async (req, res, next) => {
 
 const getCategories = async (req, res, next) => {
   try {
-    res.json(await Category.find().lean());
+    const { status } = req.query;
+    const filter = status ? { status } : {};
+    const categories = await Category.find(filter)
+      .populate('suggestedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(categories);
   } catch (err) {
     next(err);
   }
@@ -174,7 +180,7 @@ const getCategories = async (req, res, next) => {
 
 const createCategory = async (req, res, next) => {
   try {
-    const category = await Category.create(req.body);
+    const category = await Category.create({ ...req.body, status: 'active', isActive: true });
     res.status(201).json(category);
   } catch (err) {
     next(err);
@@ -184,6 +190,25 @@ const createCategory = async (req, res, next) => {
 const updateCategory = async (req, res, next) => {
   try {
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!category) return res.status(404).json({ message: 'Category not found' });
+    res.json(category);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Aprobar o rechazar una categoría sugerida
+const reviewCategory = async (req, res, next) => {
+  try {
+    const { action } = req.body; // 'approve' | 'reject'
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ message: 'action debe ser "approve" o "reject"' });
+    }
+    const update = action === 'approve'
+      ? { status: 'active', isActive: true }
+      : { status: 'rejected', isActive: false };
+
+    const category = await Category.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!category) return res.status(404).json({ message: 'Category not found' });
     res.json(category);
   } catch (err) {
@@ -608,7 +633,7 @@ module.exports = {
   createUser, updateUserRole, resetUserPassword,
   getModules, getRoles, createRole, updateRole, deleteRole,
   getUsers, toggleBlockUser,
-  getCategories, createCategory, updateCategory,
+  getCategories, createCategory, updateCategory, reviewCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
