@@ -10,11 +10,17 @@ const DEFAULTS = {
   noResults: 'Por ahora no tengo profesionales de *{service}* disponibles 😕.',
   outOfHours:
     '¡Gracias por escribir! 🙏 Nuestro horario de atención es de {open}:00 a {close}:00 hrs. Te atenderemos en cuanto abramos.',
+  resultsHint:
+    '👉 Responde con el *número (1-{count})* para ver los *trabajos* de ese profesional.\nEscribe *otro* para una nueva búsqueda.\n\n🌐 O explóralos todos aquí:\n{link}',
+  worksIntro: 'Estos son algunos *trabajos de {business}* 👷',
+  noWorks: '*{business}* aún no ha subido fotos de sus trabajos. 📷\n\nPuedes contactarlo aquí: {contact}',
+  worksNav: '¿Qué quieres hacer?\n• Escribe *volver* para regresar a la lista\n• Escribe *otro* para una nueva búsqueda',
 };
 
 const botConfigSchema = new mongoose.Schema({
   key: { type: String, unique: true, default: 'default' },
   enabled: { type: Boolean, default: true },
+  useButtons: { type: Boolean, default: true }, // intentar botones/listas interactivas en WhatsApp
   messages: {
     welcome: { type: String, default: DEFAULTS.welcome },
     noService: { type: String, default: DEFAULTS.noService },
@@ -22,6 +28,10 @@ const botConfigSchema = new mongoose.Schema({
     askZip: { type: String, default: DEFAULTS.askZip },
     noResults: { type: String, default: DEFAULTS.noResults },
     outOfHours: { type: String, default: DEFAULTS.outOfHours },
+    resultsHint: { type: String, default: DEFAULTS.resultsHint },
+    worksIntro: { type: String, default: DEFAULTS.worksIntro },
+    noWorks: { type: String, default: DEFAULTS.noWorks },
+    worksNav: { type: String, default: DEFAULTS.worksNav },
   },
   hours: {
     enabled: { type: Boolean, default: false },

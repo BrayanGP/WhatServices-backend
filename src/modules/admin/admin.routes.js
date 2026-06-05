@@ -3,11 +3,12 @@ const router = express.Router();
 const {
   getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
-  getCategories, createCategory, updateCategory,
+  getCategories, createCategory, updateCategory, reviewCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
+  getIntents, createIntent, updateIntent, deleteIntent,
   getStats,
   getRequests, getRequest, updateRequest,
   createUser, updateUserRole, resetUserPassword,
@@ -41,6 +42,7 @@ router.delete('/roles/:id', adminOnly, deleteRole);
 router.get('/categories', getCategories);
 router.post('/categories', createCategory);
 router.put('/categories/:id', updateCategory);
+router.patch('/categories/:id/review', reviewCategory);
 
 router.get('/conversations', getConversations);
 router.get('/conversations/:id', getConversation);
@@ -67,5 +69,11 @@ router.get('/stats', getStats);
 // Configuracion del bot
 router.get('/bot-config', getBotConfig);
 router.put('/bot-config', updateBotConfig);
+
+// Intenciones del bot
+router.get('/bot/intents', getIntents);
+router.post('/bot/intents', createIntent);
+router.put('/bot/intents/:id', updateIntent);
+router.delete('/bot/intents/:id', deleteIntent);
 
 module.exports = router;
