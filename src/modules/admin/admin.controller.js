@@ -192,8 +192,42 @@ const createCategory = async (req, res, next) => {
 
 const updateCategory = async (req, res, next) => {
   try {
+    const before = await Category.findById(req.params.id).lean();
+    if (!before) return res.status(404).json({ message: 'Category not found' });
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+
+    // Si cambió el nombre, propagar a todo lo que referencia la categoría por nombre
+    const oldName = before.name;
+    const newName = category.name;
+    if (oldName && newName && oldName !== newName) {
+      // Proveedores (categories es arreglo de nombres)
+      await Provider.updateMany(
+        { categories: oldName },
+        { $set: { 'categories.$[el]': newName } },
+        { arrayFilters: [{ el: oldName }] },
+      );
+      // Intenciones del bot que disparan esta categoría
+      await Intent.updateMany({ service: oldName }, { $set: { service: newName } });
+      // Flujo visual del bot (borrador + publicado): nodos de acción y condiciones
+      try {
+        const flow = await BotFlow.findOne({ key: 'default' });
+        if (flow) {
+          const replaceIn = (graph) => {
+            (graph?.nodes || []).forEach((n) => {
+              if (n.data && n.data.service === oldName) n.data.service = newName;
+              if (n.data && Array.isArray(n.data.cases)) {
+                n.data.cases.forEach((c) => (c.rules || []).forEach((r) => {
+                  if (r.field === 'service' && r.value === oldName) r.value = newName;
+                }));
+              }
+            });
+          };
+          replaceIn(flow.draft); replaceIn(flow.published);
+          flow.markModified('draft'); flow.markModified('published');
+          await flow.save();
+        }
+      } catch (e) { console.error('[updateCategory] sync flujo:', e.message); }
+    }
     res.json(category);
   } catch (err) {
     next(err);
