@@ -6,6 +6,7 @@ const {
   fill, getPostalCode, getScore, findProviders, startRequest, completeRequest,
   reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
   sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
+  getTopProviders, formatProviderList, photoUrl,
 } = require('./bot.helpers');
 
 const MAX_STEPS = 50; // anti-bucle por turno
@@ -162,7 +163,10 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     const outs = edges.filter((e) => e.source === nodeId);
     if (handle) {
       const e = outs.find((x) => x.sourceHandle === handle);
-      return e ? nodeMap[e.target] : null;
+      if (e) return nodeMap[e.target];
+      // tolerancia: si no hay arista para ese handle, usar la arista por defecto (sin handle)
+      const d = outs.find((x) => !x.sourceHandle);
+      return d ? nodeMap[d.target] : null;
     }
     const e = outs.find((x) => !x.sourceHandle) || outs[0];
     return e ? nodeMap[e.target] : null;
@@ -213,12 +217,25 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   const customVars = {};
   (cfg.variables || []).forEach((v) => { if (v && v.key) customVars[v.key] = v.value; });
 
+  // Variables dinámicas que traen datos (solo se consultan si el flujo las usa)
+  const flowStr = JSON.stringify(flow || {});
+  let topRatedList = '', topRatedCount = 0, nearbyList = '', nearbyCount = 0;
+  if (flowStr.includes('{topRated}')) {
+    const ps = await getTopProviders({ service: conv.selectedService, mode: 'score', limit: 5 });
+    topRatedList = formatProviderList(ps); topRatedCount = ps.length;
+  }
+  if (flowStr.includes('{nearby}')) {
+    const ps = await getTopProviders({ service: conv.selectedService, mode: 'near', postalCode: conv.postalCode, limit: 5 });
+    nearbyList = formatProviderList(ps); nearbyCount = ps.length;
+  }
+
   const fillVars = () => ({
     ...customVars,
     name: ctx.name, firstName, phone: ctx.phone, greeting,
     service: ctx.service || '', cp: ctx.cp || '',
     count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
     servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
+    topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
     date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
     ...ctx.vars,
   });
@@ -317,7 +334,25 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     }
 
     if (node.type === 'carousel') {
-      const cards = (data.cards || []).map((c) => ({ image: c.image, title: fill(c.title, fillVars()), body: fill(c.body, fillVars()) }));
+      const src = data.source || 'static';
+      let cards;
+      if (src === 'static') {
+        cards = (data.cards || []).map((c) => ({ image: c.image, title: fill(c.title, fillVars()), body: fill(c.body, fillVars()) }));
+      } else {
+        let providers = [];
+        if (src === 'results') {
+          providers = await orderedProviders(conv);
+        } else {
+          providers = await getTopProviders({ service: ctx.service, mode: src === 'nearby' ? 'near' : 'score', postalCode: ctx.cp, limit: 5 });
+          conv.suggestedProviders = providers.map((p) => p._id); // para que un showWorks posterior funcione
+          ctx.resultsCount = providers.length;
+        }
+        cards = providers.map((p, i) => ({
+          image: photoUrl(p.profilePhoto),
+          title: `${i + 1}. ${p.businessName}`,
+          body: `⭐${p.rating?.average || 0}${p.city ? ` · ${p.city}` : ''}`,
+        }));
+      }
       await sendCarousel(conv, phone, cards, cfg);
       current = getNext(node.id);
       continue;

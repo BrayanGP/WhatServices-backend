@@ -41,6 +41,27 @@ const findProviders = async (service, { mode, postalCode } = {}) => {
 
 const saveMsg = (conv, from, text) => conv.messages.push({ from, text, at: new Date() });
 
+// Top de proveedores (para variables/carruseles dinámicos).
+// mode: 'score' (mejor calificados) | 'near' (más cercanos por CP). service opcional.
+const getTopProviders = async ({ service, mode = 'score', postalCode, limit = 5 } = {}) => {
+  const base = { availability: 'available', isBlocked: false };
+  if (service) base.categories = service;
+  if (mode === 'near' && postalCode) {
+    let providers = await Provider.find({ ...base, postalCode }).sort({ 'rating.average': -1 }).limit(limit).lean();
+    if (providers.length < limit) {
+      const ids = providers.map((p) => p._id);
+      const extra = await Provider.find({ ...base, _id: { $nin: ids } }).sort({ 'rating.average': -1 }).limit(limit - providers.length).lean();
+      providers = [...providers, ...extra];
+    }
+    return providers;
+  }
+  return Provider.find(base).sort({ 'rating.average': -1, 'rating.count': -1 }).limit(limit).lean();
+};
+
+// Lista de proveedores como texto numerado (para {topRated}/{nearby})
+const formatProviderList = (providers = []) =>
+  providers.map((p, i) => `${i + 1}. ${p.businessName} ⭐${p.rating?.average || 0}${p.city ? ` · ${p.city}` : ''}`).join('\n');
+
 // Numero en formato WhatsApp (MX por defecto): solo digitos, 10 -> 52+10
 const waNumber = (phone) => {
   const d = String(phone || '').replace(/\D/g, '');
@@ -249,4 +270,5 @@ module.exports = {
   waNumber, buildContact, photoUrl, startRequest, completeRequest, reply,
   sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
   sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
+  getTopProviders, formatProviderList,
 };
