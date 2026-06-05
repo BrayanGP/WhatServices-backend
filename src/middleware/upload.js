@@ -51,4 +51,12 @@ const upload = multer({
   },
 });
 
-module.exports = { upload, cloudinary, useCloudinary };
+const { BACKEND_PUBLIC_URL, PORT } = require('../config/env');
+// URL pública de un archivo subido (Cloudinary o disco local)
+const fileUrl = (file) => {
+  if (useCloudinary) return { url: file.path, publicId: file.filename };
+  const base = BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
+  return { url: `${base}/uploads/${file.filename}`, publicId: file.filename };
+};
+
+module.exports = { upload, cloudinary, useCloudinary, fileUrl };

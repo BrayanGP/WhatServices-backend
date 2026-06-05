@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../users/user.model');
 const { modulesForUser } = require('../../utils/permissions');
+const { fileUrl } = require('../../middleware/upload');
 const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env');
 
 const COOKIE_OPTS = {
@@ -76,4 +77,62 @@ const logout = (req, res) => {
   res.json({ message: 'Logged out' });
 };
 
-module.exports = { register, login, refresh, logout };
+// ----- Cuenta personal (cualquier usuario autenticado) -----
+
+const me = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('-passwordHash').populate('roleId', 'name').lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const modules = await modulesForUser(user);
+    res.json({
+      id: user._id, name: user.name, email: user.email, phone: user.phone,
+      role: user.role, roleName: user.roleId?.name, avatar: user.avatar, modules,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updateProfile = async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    const update = {};
+    if (name?.trim()) update.name = name.trim();
+    const user = await User.findByIdAndUpdate(req.user.id, update, { new: true }).select('-passwordHash').lean();
+    res.json({ id: user._id, name: user.name, email: user.email, avatar: user.avatar });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    }
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!(await user.comparePassword(currentPassword || ''))) {
+      return res.status(400).json({ message: 'La contraseña actual es incorrecta' });
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const uploadAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file' });
+    const avatar = fileUrl(req.file);
+    await User.findByIdAndUpdate(req.user.id, { avatar });
+    res.json({ avatar });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, login, refresh, logout, me, updateProfile, changePassword, uploadAvatar };
