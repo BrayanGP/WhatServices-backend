@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { getByProvider, create } = require('./reviews.controller');
-const { verifyToken, requireRole } = require('../../middleware/auth');
+const { getByProvider, getByDevice, upsert } = require('./reviews.controller');
 
-router.get('/provider/:id', getByProvider);
-router.post('/', verifyToken, requireRole('client'), create);
+router.get('/provider/:id',                 getByProvider);
+router.get('/provider/:id/device/:deviceId', getByDevice);
+router.post('/',                             upsert);       // público, usa deviceId
 
 module.exports = router;
