@@ -5,7 +5,8 @@ const multerS3 = require('multer-s3');
 const { S3Client } = require('@aws-sdk/client-s3');
 const {
   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
-  S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_REGION,
+  S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_REGION, S3_PUBLIC_URL,
+  BACKEND_PUBLIC_URL, PORT,
 } = require('../config/env');
 
 let storage;
@@ -31,7 +32,6 @@ if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
     key: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
       const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-      // Carpeta dedicada dentro del bucket
       cb(null, `whatservices/providers/${unique}`);
     },
   });
@@ -84,4 +84,19 @@ const upload = multer({
   },
 });
 
-module.exports = { upload, cloudinary, storageMode };
+const useCloudinary = storageMode === 'cloudinary';
+
+// URL pública de un archivo subido, según el modo de almacenamiento
+const fileUrl = (file) => {
+  if (storageMode === 's3') {
+    const url = file.location || (S3_PUBLIC_URL ? `${S3_PUBLIC_URL.replace(/\/$/, '')}/${file.key}` : file.key);
+    return { url, publicId: file.key };
+  }
+  if (storageMode === 'cloudinary') {
+    return { url: file.path, publicId: file.filename };
+  }
+  const base = BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
+  return { url: `${base}/uploads/${file.filename}`, publicId: file.filename };
+};
+
+module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl };

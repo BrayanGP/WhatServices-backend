@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['client', 'provider', 'admin', 'staff'], default: 'client' },
   // Para usuarios del panel (staff): rol con módulos asignados
   roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
+  avatar: { url: String, publicId: String },
   isBlocked: { type: Boolean, default: false },
 }, { timestamps: true });
 
