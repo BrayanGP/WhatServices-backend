@@ -77,6 +77,7 @@ const handleIncoming = (req, res) => {
 const processIncoming = async (msg, instance) => {
   try {
     const { phone, text, name } = msg;
+    console.log('[Bot] entrante:', phone, '·', String(text || '').slice(0, 60));
 
     let conv = await Conversation.findOne({ phone });
     if (!conv) conv = await Conversation.create({ phone, name, instance });
