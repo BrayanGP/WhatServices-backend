@@ -42,10 +42,18 @@ const register = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const { email, phone, password } = req.body;
+    // Cliente inicia con teléfono; admin/staff con correo. Acepta cualquiera.
+    let user = null;
+    if (phone && String(phone).trim()) {
+      const d10 = String(phone).replace(/\D/g, '').slice(-10);
+      if (d10.length >= 10) user = await User.findOne({ phone: new RegExp(`${d10}$`) });
+    } else if (email && String(email).trim()) {
+      const e = String(email).trim();
+      user = await User.findOne({ email: new RegExp(`^${e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    }
     if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Credenciales inválidas' });
     }
     if (user.isBlocked) {
       return res.status(403).json({ message: 'Account blocked' });
