@@ -12,6 +12,8 @@ const {
 let storage;
 let cloudinary = null;
 let storageMode = 'local';
+let s3Client = null;
+const s3Bucket = S3_BUCKET_NAME;
 
 if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
   // --- Modo S3-compatible (Tigris / Railway / AWS) ---
@@ -24,6 +26,7 @@ if (S3_ENDPOINT && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY && S3_BUCKET_NAME) {
     },
     forcePathStyle: false,
   });
+  s3Client = s3;
 
   storage = multerS3({
     s3,
@@ -103,7 +106,12 @@ const withFolder = (fn) => (req, res, next) => {
 const uploadsRoot = path.join(__dirname, '../../uploads');
 const fileUrl = (file) => {
   if (storageMode === 's3') {
-    const url = file.location || (S3_PUBLIC_URL ? `${S3_PUBLIC_URL.replace(/\/$/, '')}/${file.key}` : file.key);
+    // El bucket es privado → servimos vía proxy del backend (/files/<key>).
+    // Si defines S3_PUBLIC_URL (bucket público), se usa esa URL directa.
+    const base = (BACKEND_PUBLIC_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const url = S3_PUBLIC_URL
+      ? `${S3_PUBLIC_URL.replace(/\/$/, '')}/${file.key}`
+      : `${base}/files/${file.key}`;
     return { url, publicId: file.key };
   }
   if (storageMode === 'cloudinary') {
@@ -116,4 +124,4 @@ const fileUrl = (file) => {
   return { url: `${base}/uploads/${sub}${file.filename}`, publicId: `${sub}${file.filename}` };
 };
 
-module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl, withFolder };
+module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl, withFolder, s3Client, s3Bucket };
