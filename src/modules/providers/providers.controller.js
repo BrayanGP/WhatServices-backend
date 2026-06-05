@@ -9,7 +9,7 @@ const register = async (req, res, next) => {
   try {
     const {
       name, email, phone, password,
-      businessName, ownerName, city, postalCode, description,
+      businessName, ownerName, city, postalCode, address, description,
       categories = [], specialties = [], lat, lng,
     } = req.body;
 
@@ -30,6 +30,7 @@ const register = async (req, res, next) => {
       phone,
       city,
       postalCode,
+      address,
       description,
       categories,
       specialties,
