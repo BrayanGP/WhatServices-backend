@@ -5,9 +5,11 @@ const Intent = require('./intent.model');
 const {
   fill, getPostalCode, getScore, findProviders, startRequest, completeRequest,
   reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
+  sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
 } = require('./bot.helpers');
 
 const MAX_STEPS = 50; // anti-bucle por turno
+const WAIT_TYPES = ['ask', 'buttons', 'list', 'poll']; // nodos que pausan esperando respuesta
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -22,6 +24,22 @@ const captureValue = (capture, text, lower) => {
       return null;
     default: return text; // 'text' o sin captura: siempre válido
   }
+};
+
+// ---- Resolución de selección en nodos interactivos (botones/lista/encuesta) ----
+// items: [{ id, label }]; prefix: 'btn' | 'row' | 'opt'. Devuelve handle o 'else'.
+const resolveSelection = (items, prefix, text, lower) => {
+  const list = items || [];
+  // por id directo (selectedButtonId / selectedRowId llegan como texto)
+  let hit = list.find((it) => String(it.id) === text);
+  if (hit) return `${prefix}:${hit.id}`;
+  // por número (1..n) — fallback de texto
+  const num = lower.match(/^(\d{1,2})$/);
+  if (num) { const it = list[Number(num[1]) - 1]; if (it) return `${prefix}:${it.id}`; }
+  // por etiqueta (coincidencia insensible a acentos)
+  hit = list.find((it) => norm(it.label) && norm(lower).includes(norm(it.label)));
+  if (hit) return `${prefix}:${hit.id}`;
+  return 'else';
 };
 
 // ---- Evaluación de condiciones (if / else-if / case) ----
@@ -188,21 +206,30 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   let current = null;
   const waitingNode = flowState.nodeId ? nodeMap[flowState.nodeId] : null;
 
-  if (waitingNode && waitingNode.type === 'ask') {
-    const cap = waitingNode.data?.capture;
-    const val = captureValue(cap, text, lower);
-    if (val == null && cap && cap !== 'text') {
-      // respuesta inválida → repetir la pregunta y seguir esperando
-      await reply(conv, phone, fill(waitingNode.data?.text || 'No te entendí, intenta de nuevo.', fillVars()));
-      conv.context = { ...conv.context, flow: { nodeId: waitingNode.id, vars: ctx.vars } };
-      conv.markModified('context');
-      return;
+  if (waitingNode && WAIT_TYPES.includes(waitingNode.type)) {
+    const d = waitingNode.data || {};
+    if (waitingNode.type === 'ask') {
+      const cap = d.capture;
+      const val = captureValue(cap, text, lower);
+      if (val == null && cap && cap !== 'text') {
+        // respuesta inválida → repetir la pregunta y seguir esperando
+        await reply(conv, phone, fill(d.text || 'No te entendí, intenta de nuevo.', fillVars()));
+        conv.context = { ...conv.context, flow: { nodeId: waitingNode.id, vars: ctx.vars } };
+        conv.markModified('context');
+        return;
+      }
+      ctx.vars[d.saveAs || 'respuesta'] = val;
+      if (cap === 'zip') { conv.postalCode = val; ctx.cp = val; }
+      if (cap === 'mode') ctx.vars.searchMode = val;
+      current = getNext(waitingNode.id);
+    } else if (waitingNode.type === 'buttons') {
+      current = getNext(waitingNode.id, resolveSelection(d.buttons, 'btn', text, lower));
+    } else if (waitingNode.type === 'list') {
+      const rows = (d.sections || []).flatMap((s) => s.rows || []);
+      current = getNext(waitingNode.id, resolveSelection(rows, 'row', text, lower));
+    } else if (waitingNode.type === 'poll') {
+      current = getNext(waitingNode.id, resolveSelection(d.options, 'opt', text, lower));
     }
-    const key = waitingNode.data?.saveAs || 'respuesta';
-    ctx.vars[key] = val;
-    if (cap === 'zip') { conv.postalCode = val; ctx.cp = val; }
-    if (cap === 'mode') ctx.vars.searchMode = val;
-    current = getNext(waitingNode.id);
   } else {
     const start = nodes.find((n) => n.type === 'start');
     current = start ? getNext(start.id) : null;
@@ -239,6 +266,42 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
       continue;
     }
 
+    if (node.type === 'intent') {
+      const sel = (data.intents || []).includes(ctx.intent) && ctx.intent ? `intent:${ctx.intent}` : 'else';
+      current = getNext(node.id, sel);
+      continue;
+    }
+
+    if (node.type === 'buttons') {
+      await sendButtonsNode(conv, phone, { text: fill(data.text, fillVars()), buttons: data.buttons || [] }, cfg);
+      conv.context = { ...conv.context, flow: { nodeId: node.id, vars: ctx.vars } };
+      conv.markModified('context');
+      return;
+    }
+
+    if (node.type === 'list') {
+      await sendListNode(conv, phone, {
+        text: fill(data.text, fillVars()), buttonText: data.buttonText, footer: data.footer, sections: data.sections || [],
+      }, cfg);
+      conv.context = { ...conv.context, flow: { nodeId: node.id, vars: ctx.vars } };
+      conv.markModified('context');
+      return;
+    }
+
+    if (node.type === 'poll') {
+      await sendPollNode(conv, phone, { question: fill(data.question, fillVars()), options: data.options || [], multi: data.multi }, cfg);
+      conv.context = { ...conv.context, flow: { nodeId: node.id, vars: ctx.vars } };
+      conv.markModified('context');
+      return;
+    }
+
+    if (node.type === 'carousel') {
+      const cards = (data.cards || []).map((c) => ({ image: c.image, title: fill(c.title, fillVars()), body: fill(c.body, fillVars()) }));
+      await sendCarousel(conv, phone, cards, cfg);
+      current = getNext(node.id);
+      continue;
+    }
+
     if (node.type === 'action') {
       const out = await runAction(node, ctx, conv, phone, cfg);
       current = getNext(node.id, out);
@@ -261,4 +324,4 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   conv.markModified('context');
 };
 
-module.exports = { runFlow, evalRule, evalCase, captureValue };
+module.exports = { runFlow, evalRule, evalCase, captureValue, resolveSelection };

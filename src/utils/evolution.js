@@ -59,6 +59,16 @@ const sendList = async (number, { title = '', description = '', buttonText = 'Ve
   return ok;
 };
 
+// Encuesta nativa de WhatsApp. Nota: el VOTO llega por messages.update (poco fiable
+// para ramificar). El envío sí funciona; la ramificación usa fallback por texto.
+const sendPoll = async (number, { name = '', values = [], selectableCount = 1 }, instance = EVOLUTION_INSTANCE) => {
+  const { ok } = await evoFetch(`/message/sendPoll/${instance}`, {
+    method: 'POST',
+    body: { number, name, selectableCount, values },
+  });
+  return ok;
+};
+
 // ---- Instancias ----
 const fetchInstances = () => evoFetch('/instance/fetchInstances');
 
@@ -89,6 +99,7 @@ module.exports = {
   sendMedia,
   sendButtons,
   sendList,
+  sendPoll,
   fetchInstances,
   createInstance,
   connectInstance,
