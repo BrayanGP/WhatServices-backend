@@ -6,6 +6,7 @@ const Conversation = require('../bot/conversation.model');
 const BotConfig = require('../bot/botconfig.model');
 const Intent = require('../bot/intent.model');
 const BotFlow = require('../bot/botflow.model');
+const FlowTemplate = require('../bot/flowtemplate.model');
 const Request = require('../requests/request.model');
 const Role = require('./role.model');
 const Setting = require('./setting.model');
@@ -700,6 +701,40 @@ const unpublishFlow = async (req, res, next) => {
   }
 };
 
+// ----- Plantillas de flujo (propias) -----
+
+const getFlowTemplates = async (req, res, next) => {
+  try {
+    const tpls = await FlowTemplate.find().sort({ createdAt: -1 }).lean();
+    res.json(tpls);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createFlowTemplate = async (req, res, next) => {
+  try {
+    const { name, description, icon, nodes = [], edges = [] } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ message: 'El nombre es obligatorio' });
+    const tpl = await FlowTemplate.create({
+      name: name.trim(), description: description || '', icon: icon || '⭐',
+      graph: { nodes, edges }, createdBy: req.user?.id,
+    });
+    res.status(201).json(tpl);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteFlowTemplate = async (req, res, next) => {
+  try {
+    await FlowTemplate.findByIdAndDelete(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ----- Roles y módulos -----
 
 const getModules = async (req, res, next) => {
@@ -764,6 +799,7 @@ module.exports = {
   getBotConfig, updateBotConfig,
   getIntents, createIntent, updateIntent, deleteIntent,
   getFlow, saveFlow, publishFlow, unpublishFlow,
+  getFlowTemplates, createFlowTemplate, deleteFlowTemplate,
   getStats,
   getRequests, getRequest, updateRequest,
 };
