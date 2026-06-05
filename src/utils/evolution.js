@@ -40,6 +40,25 @@ const sendMedia = async (number, mediaUrl, caption = '', instance = EVOLUTION_IN
   return ok;
 };
 
+// Botones interactivos (reply buttons). Devuelve true si Evolution lo aceptó.
+// El llamador SIEMPRE debe tener un fallback de texto por si el dispositivo no los renderiza.
+const sendButtons = async (number, { title = '', description = '', footer = '', buttons = [] }, instance = EVOLUTION_INSTANCE) => {
+  const { ok } = await evoFetch(`/message/sendButtons/${instance}`, {
+    method: 'POST',
+    body: { number, title, description, footer, buttons },
+  });
+  return ok;
+};
+
+// Lista interactiva (menú con secciones y filas). Ideal para >3 opciones.
+const sendList = async (number, { title = '', description = '', buttonText = 'Ver', footerText = '', sections = [] }, instance = EVOLUTION_INSTANCE) => {
+  const { ok } = await evoFetch(`/message/sendList/${instance}`, {
+    method: 'POST',
+    body: { number, title, description, buttonText, footerText, sections },
+  });
+  return ok;
+};
+
 // ---- Instancias ----
 const fetchInstances = () => evoFetch('/instance/fetchInstances');
 
@@ -68,6 +87,8 @@ const setWebhook = (instance, url, events = ['MESSAGES_UPSERT']) =>
 module.exports = {
   sendText,
   sendMedia,
+  sendButtons,
+  sendList,
   fetchInstances,
   createInstance,
   connectInstance,
