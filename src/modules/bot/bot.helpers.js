@@ -1,6 +1,6 @@
 const Provider = require('../providers/provider.model');
 const Request = require('../requests/request.model');
-const { sendText, sendMedia, sendButtons, sendList } = require('../../utils/evolution');
+const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/evolution');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 
 // Retraso humano entre mensajes para evitar baneos (configurable)
@@ -185,8 +185,68 @@ const parseSelection = (text, lower, ids) => {
   return {};
 };
 
+// ---- Componentes interactivos (con fallback a texto numerado) ----
+
+// Botones de respuesta rápida (máx 3). text ya viene con variables resueltas.
+const sendButtonsNode = async (conv, phone, { text = '', buttons = [] }, cfg) => {
+  await sleep(REPLY_DELAY_MS);
+  const list = (buttons || []).slice(0, 3);
+  let ok = false;
+  try {
+    ok = await sendButtons(phone, {
+      description: text || ' ', footer: 'WhatServices',
+      buttons: list.map((b) => ({ type: 'reply', displayText: b.label, id: b.id })),
+    }, conv.instance);
+  } catch (e) { /* fallback abajo */ }
+  saveMsg(conv, 'bot', `[botones] ${text}\n` + list.map((b) => `• ${b.label}`).join('\n'));
+  if (!ok) await reply(conv, phone, `${text}\n\n` + list.map((b, i) => `${i + 1}. ${b.label}`).join('\n'));
+};
+
+// Lista interactiva con secciones/filas.
+const sendListNode = async (conv, phone, { text = '', buttonText = 'Ver opciones', footer = 'WhatServices', sections = [] }, cfg) => {
+  await sleep(REPLY_DELAY_MS);
+  const secs = (sections || []).map((s) => ({
+    title: s.title || '',
+    rows: (s.rows || []).map((r) => ({ title: r.label, description: r.description || '', rowId: r.id })),
+  }));
+  let ok = false;
+  try {
+    ok = await sendList(phone, { title: '', description: text || ' ', buttonText, footerText: footer, sections: secs }, conv.instance);
+  } catch (e) { /* fallback abajo */ }
+  const flat = (sections || []).flatMap((s) => s.rows || []);
+  saveMsg(conv, 'bot', `[lista] ${text}\n` + flat.map((r) => `• ${r.label}`).join('\n'));
+  if (!ok) await reply(conv, phone, `${text}\n\n` + flat.map((r, i) => `${i + 1}. ${r.label}`).join('\n'));
+};
+
+// Encuesta nativa (el voto puede no ramificar; siempre se manda fallback con números).
+const sendPollNode = async (conv, phone, { question = '', options = [], multi = false }, cfg) => {
+  await sleep(REPLY_DELAY_MS);
+  const values = (options || []).map((o) => o.label);
+  let ok = false;
+  try {
+    ok = await sendPoll(phone, { name: question, values, selectableCount: multi ? values.length : 1 }, conv.instance);
+  } catch (e) { /* fallback abajo */ }
+  saveMsg(conv, 'bot', `[encuesta] ${question}\n` + (options || []).map((o) => `• ${o.label}`).join('\n'));
+  if (!ok) await reply(conv, phone, `${question}\n\n` + (options || []).map((o, i) => `${i + 1}. ${o.label}`).join('\n'));
+};
+
+// Carrusel = galería de tarjetas (secuencia imagen + texto). WhatsApp no tiene carrusel nativo en Baileys.
+const sendCarousel = async (conv, phone, cards = [], cfg) => {
+  for (const c of (cards || [])) {
+    const caption = [c.title ? `*${c.title}*` : '', c.body || ''].filter(Boolean).join('\n');
+    if (c.image) {
+      await sleep(REPLY_DELAY_MS);
+      try { await sendMedia(phone, c.image, caption, conv.instance); } catch (e) { /* ignore */ }
+      saveMsg(conv, 'bot', `[tarjeta] ${caption}`);
+    } else if (caption) {
+      await reply(conv, phone, caption);
+    }
+  }
+};
+
 module.exports = {
   REPLY_DELAY_MS, sleep, fill, getPostalCode, getScore, findProviders, saveMsg,
   waNumber, buildContact, photoUrl, startRequest, completeRequest, reply,
   sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
+  sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
 };
