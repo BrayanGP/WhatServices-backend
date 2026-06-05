@@ -687,6 +687,32 @@ const deleteIntent = async (req, res, next) => {
   }
 };
 
+// Intenciones por defecto que usan las plantillas (saludo/despedida/ayuda). Idempotente por clave.
+const DEFAULT_INTENTS = [
+  { name: 'Saludo', key: 'saludo', priority: 20, response: '{greeting}, {firstName}! 😊',
+    examples: ['hola', 'holi', 'buenas', 'buen día', 'buenos días', 'buenas tardes', 'buenas noches', 'qué tal', 'hey', 'saludos'] },
+  { name: 'Despedida', key: 'despedida', priority: 20, response: '¡Gracias por usar *WhatServices*! 👋 Aquí estaré cuando me necesites.',
+    examples: ['adios', 'adiós', 'salir', 'gracias', 'bye', 'hasta luego', 'nos vemos', 'chao', 'ya no', 'terminar', 'cancelar', 'fin'] },
+  { name: 'Ayuda', key: 'ayuda', priority: 15, response: '',
+    examples: ['ayuda', 'help', 'no sé', 'no se', 'cómo funciona', 'como funciona', 'qué haces', 'información', 'info', 'menú', 'menu'] },
+  { name: 'Hablar con humano', key: 'hablar-humano', priority: 25, response: '¡Claro! Te paso con un asesor humano. 🙋 En un momento te contactan.',
+    examples: ['humano', 'asesor', 'persona', 'agente', 'quiero hablar con alguien', 'atención a cliente', 'soporte humano'] },
+];
+
+const ensureDefaultIntents = async (req, res, next) => {
+  try {
+    let created = 0;
+    for (const d of DEFAULT_INTENTS) {
+      const exists = await Intent.findOne({ key: d.key });
+      if (!exists) { await Intent.create({ ...d, active: true }); created += 1; }
+    }
+    const intents = await Intent.find().sort({ priority: -1, name: 1 }).lean();
+    res.json({ created, intents });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ----- Flujo visual del bot (constructor drag-and-drop) -----
 
 const getFlow = async (req, res, next) => {
@@ -836,7 +862,7 @@ module.exports = {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
-  getIntents, createIntent, updateIntent, deleteIntent,
+  getIntents, createIntent, updateIntent, deleteIntent, ensureDefaultIntents,
   getFlow, saveFlow, publishFlow, unpublishFlow,
   getFlowTemplates, createFlowTemplate, deleteFlowTemplate,
   getStats,
