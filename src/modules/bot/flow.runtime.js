@@ -195,10 +195,20 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     matchCategory,
   };
 
+  // Variables dinámicas (fecha/hora/saludo) según zona horaria configurada
+  const tz = cfg.hours?.tz || 'America/Mexico_City';
+  const now = new Date();
+  const curHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now));
+  const greeting = curHour < 12 ? 'Buenos días' : curHour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const firstName = String(ctx.name || '').trim().split(/\s+/)[0] || '';
+  const dateStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, dateStyle: 'long' }).format(now);
+  const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now);
+
   const fillVars = () => ({
-    name: ctx.name, phone: ctx.phone, service: ctx.service || '', cp: ctx.cp || '',
-    count: ctx.resultsCount || 0, services: servicesList,
-    open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
+    name: ctx.name, firstName, phone: ctx.phone, greeting,
+    service: ctx.service || '', cp: ctx.cp || '',
+    count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
+    date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
     ...ctx.vars,
   });
 
