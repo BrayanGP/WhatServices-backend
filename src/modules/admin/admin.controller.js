@@ -4,6 +4,7 @@ const User = require('../users/user.model');
 const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
 const BotConfig = require('../bot/botconfig.model');
+const Intent = require('../bot/intent.model');
 const Request = require('../requests/request.model');
 const Role = require('./role.model');
 const Setting = require('./setting.model');
@@ -564,13 +565,82 @@ const getBotConfig = async (req, res, next) => {
 
 const updateBotConfig = async (req, res, next) => {
   try {
-    const { enabled, messages, hours } = req.body;
+    const { enabled, useButtons, messages, hours } = req.body;
     const cfg = await BotConfig.getSingleton();
     if (enabled !== undefined) cfg.enabled = enabled;
+    if (useButtons !== undefined) cfg.useButtons = useButtons;
     if (messages) cfg.messages = { ...cfg.messages.toObject(), ...messages };
     if (hours) cfg.hours = { ...cfg.hours.toObject(), ...hours };
     await cfg.save();
     res.json(cfg);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ----- Intenciones del bot -----
+
+const slugify = (s) => String(s || '')
+  .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+const getIntents = async (req, res, next) => {
+  try {
+    const intents = await Intent.find().sort({ priority: -1, name: 1 }).lean();
+    res.json(intents);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createIntent = async (req, res, next) => {
+  try {
+    const { name, key, description, examples, response, service, priority, active } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: 'El nombre es obligatorio' });
+    const intent = await Intent.create({
+      name: name.trim(),
+      key: (key?.trim() || slugify(name)),
+      description,
+      examples: Array.isArray(examples) ? examples : String(examples || '').split('\n').map((s) => s.trim()).filter(Boolean),
+      response,
+      service: service || undefined,
+      priority: priority != null ? Number(priority) : 10,
+      active: active !== undefined ? active : true,
+    });
+    res.status(201).json(intent);
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Ya existe una intención con esa clave' });
+    next(err);
+  }
+};
+
+const updateIntent = async (req, res, next) => {
+  try {
+    const { name, key, description, examples, response, service, priority, active } = req.body;
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (key !== undefined) update.key = key;
+    if (description !== undefined) update.description = description;
+    if (examples !== undefined) {
+      update.examples = Array.isArray(examples) ? examples : String(examples || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    }
+    if (response !== undefined) update.response = response;
+    if (service !== undefined) update.service = service || undefined;
+    if (priority !== undefined) update.priority = Number(priority);
+    if (active !== undefined) update.active = active;
+    const intent = await Intent.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
+    if (!intent) return res.status(404).json({ message: 'Intención no encontrada' });
+    res.json(intent);
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Ya existe una intención con esa clave' });
+    next(err);
+  }
+};
+
+const deleteIntent = async (req, res, next) => {
+  try {
+    await Intent.findByIdAndDelete(req.params.id);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -638,6 +708,7 @@ module.exports = {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
+  getIntents, createIntent, updateIntent, deleteIntent,
   getStats,
   getRequests, getRequest, updateRequest,
 };

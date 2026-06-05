@@ -8,6 +8,7 @@ const {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
+  getIntents, createIntent, updateIntent, deleteIntent,
   getStats,
   getRequests, getRequest, updateRequest,
   createUser, updateUserRole, resetUserPassword,
@@ -68,5 +69,11 @@ router.get('/stats', getStats);
 // Configuracion del bot
 router.get('/bot-config', getBotConfig);
 router.put('/bot-config', updateBotConfig);
+
+// Intenciones del bot
+router.get('/bot/intents', getIntents);
+router.post('/bot/intents', createIntent);
+router.put('/bot/intents/:id', updateIntent);
+router.delete('/bot/intents/:id', deleteIntent);
 
 module.exports = router;
