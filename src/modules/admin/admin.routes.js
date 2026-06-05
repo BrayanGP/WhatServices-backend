@@ -8,7 +8,7 @@ const {
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
   getBotConfig, updateBotConfig,
-  getIntents, createIntent, updateIntent, deleteIntent,
+  getIntents, createIntent, updateIntent, deleteIntent, ensureDefaultIntents,
   getFlow, saveFlow, publishFlow, unpublishFlow,
   getFlowTemplates, createFlowTemplate, deleteFlowTemplate,
   getStats,
@@ -77,6 +77,7 @@ router.get('/bot/intents', getIntents);
 router.post('/bot/intents', createIntent);
 router.put('/bot/intents/:id', updateIntent);
 router.delete('/bot/intents/:id', deleteIntent);
+router.post('/bot/intents/ensure-defaults', ensureDefaultIntents);
 
 // Flujo visual del bot (constructor drag-and-drop)
 router.get('/bot/flow', getFlow);
