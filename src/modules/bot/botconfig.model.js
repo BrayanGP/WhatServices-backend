@@ -21,6 +21,8 @@ const botConfigSchema = new mongoose.Schema({
   key: { type: String, unique: true, default: 'default' },
   enabled: { type: Boolean, default: true },
   useButtons: { type: Boolean, default: true }, // intentar botones/listas interactivas en WhatsApp
+  // Variables propias del usuario, usables como {clave} en cualquier mensaje del flujo
+  variables: { type: [{ key: { type: String }, value: { type: String } }], default: [] },
   messages: {
     welcome: { type: String, default: DEFAULTS.welcome },
     noService: { type: String, default: DEFAULTS.noService },

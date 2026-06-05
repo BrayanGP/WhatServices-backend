@@ -567,10 +567,15 @@ const getBotConfig = async (req, res, next) => {
 
 const updateBotConfig = async (req, res, next) => {
   try {
-    const { enabled, useButtons, messages, hours } = req.body;
+    const { enabled, useButtons, messages, hours, variables } = req.body;
     const cfg = await BotConfig.getSingleton();
     if (enabled !== undefined) cfg.enabled = enabled;
     if (useButtons !== undefined) cfg.useButtons = useButtons;
+    if (variables !== undefined) {
+      cfg.variables = (Array.isArray(variables) ? variables : [])
+        .filter((v) => v && v.key && String(v.key).trim())
+        .map((v) => ({ key: String(v.key).trim(), value: String(v.value ?? '') }));
+    }
     if (messages) cfg.messages = { ...cfg.messages.toObject(), ...messages };
     if (hours) cfg.hours = { ...cfg.hours.toObject(), ...hours };
     await cfg.save();
