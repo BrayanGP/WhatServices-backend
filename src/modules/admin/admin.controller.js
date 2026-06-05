@@ -5,7 +5,9 @@ const Category = require('./category.model');
 const Conversation = require('../bot/conversation.model');
 const BotConfig = require('../bot/botconfig.model');
 const Request = require('../requests/request.model');
+const Role = require('./role.model');
 const Setting = require('./setting.model');
+const { MODULES } = require('../../config/modules');
 const evolution = require('../../utils/evolution');
 const { sendText } = evolution;
 
@@ -86,15 +88,65 @@ const toggleBlockProvider = async (req, res, next) => {
   }
 };
 
+// Solo usuarios del PANEL (admin/staff), no clientes ni proveedores del front
 const getUsers = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
+    const filter = { role: { $in: ['admin', 'staff'] } };
     const skip = (Number(page) - 1) * Number(limit);
     const [users, total] = await Promise.all([
-      User.find().select('-passwordHash').skip(skip).limit(Number(limit)).lean(),
-      User.countDocuments(),
+      User.find(filter).select('-passwordHash').populate('roleId', 'name modules').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      User.countDocuments(filter),
     ]);
     res.json({ users, total });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Crea un usuario del panel (staff con rol asignado)
+const createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, roleId } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: 'name, email y password son obligatorios' });
+    if (password.length < 6) return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(409).json({ message: 'Ya existe un usuario con ese correo' });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email, passwordHash, role: 'staff', roleId: roleId || null });
+    const out = await User.findById(user._id).select('-passwordHash').populate('roleId', 'name modules').lean();
+    res.status(201).json(out);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Cambia el rol de un usuario del panel
+const updateUserRole = async (req, res, next) => {
+  try {
+    const { roleId } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ message: 'El administrador principal tiene acceso total' });
+    user.roleId = roleId || null;
+    await user.save();
+    const out = await User.findById(user._id).select('-passwordHash').populate('roleId', 'name modules').lean();
+    res.json(out);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Reinicia la contraseña de un usuario del panel
+const resetUserPassword = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const rnd = Math.random().toString(36).slice(-6);
+    const newPassword = `Ws${rnd}!`;
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ password: newPassword });
   } catch (err) {
     next(err);
   }
@@ -499,8 +551,62 @@ const updateBotConfig = async (req, res, next) => {
   }
 };
 
+// ----- Roles y módulos -----
+
+const getModules = async (req, res, next) => {
+  try { res.json(MODULES); } catch (err) { next(err); }
+};
+
+const getRoles = async (req, res, next) => {
+  try {
+    const roles = await Role.find().sort({ name: 1 }).lean();
+    res.json(roles);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createRole = async (req, res, next) => {
+  try {
+    const { name, modules = [] } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: 'Nombre requerido' });
+    const role = await Role.create({ name: name.trim(), modules });
+    res.status(201).json(role);
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Ya existe un rol con ese nombre' });
+    next(err);
+  }
+};
+
+const updateRole = async (req, res, next) => {
+  try {
+    const { name, modules } = req.body;
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (modules !== undefined) update.modules = modules;
+    const role = await Role.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!role) return res.status(404).json({ message: 'Role not found' });
+    res.json(role);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteRole = async (req, res, next) => {
+  try {
+    const inUse = await User.countDocuments({ roleId: req.params.id });
+    if (inUse > 0) return res.status(400).json({ message: `No se puede eliminar: ${inUse} usuario(s) usan este rol` });
+    await Role.findByIdAndDelete(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
+  createUser, updateUserRole, resetUserPassword,
+  getModules, getRoles, createRole, updateRole, deleteRole,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,

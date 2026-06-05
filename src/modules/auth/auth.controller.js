@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../users/user.model');
+const { modulesForUser } = require('../../utils/permissions');
 const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env');
 
 const COOKIE_OPTS = {
@@ -48,7 +49,8 @@ const login = async (req, res, next) => {
     }
     const { accessToken, refreshToken } = signTokens(user);
     res.cookie('refreshToken', refreshToken, { ...COOKIE_OPTS, maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ accessToken, user: { id: user._id, name: user.name, role: user.role } });
+    const modules = await modulesForUser(user);
+    res.json({ accessToken, user: { id: user._id, name: user.name, role: user.role, modules } });
   } catch (err) {
     next(err);
   }

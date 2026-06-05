@@ -6,7 +6,9 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, unique: true, sparse: true },
   email: { type: String, unique: true, sparse: true },
   passwordHash: { type: String, required: true },
-  role: { type: String, enum: ['client', 'provider', 'admin'], default: 'client' },
+  role: { type: String, enum: ['client', 'provider', 'admin', 'staff'], default: 'client' },
+  // Para usuarios del panel (staff): rol con módulos asignados
+  roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
   isBlocked: { type: Boolean, default: false },
 }, { timestamps: true });
 

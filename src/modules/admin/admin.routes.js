@@ -10,17 +10,34 @@ const {
   getBotConfig, updateBotConfig,
   getStats,
   getRequests, getRequest, updateRequest,
+  createUser, updateUserRole, resetUserPassword,
+  getModules, getRoles, createRole, updateRole, deleteRole,
 } = require('./admin.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
-router.use(verifyToken, requireRole('admin'));
+// Acceso al panel: admin (total) o staff (según su rol). El gating fino es por módulos en el front.
+router.use(verifyToken, requireRole('admin', 'staff'));
+
+// Gestión de usuarios y roles: solo admin
+const adminOnly = requireRole('admin');
 
 router.get('/providers', getProviders);
 router.patch('/providers/:id/reset-password', resetProviderPassword);
 router.patch('/providers/:id/verify', toggleVerify);
 router.patch('/providers/:id/block', toggleBlockProvider);
+
 router.get('/users', getUsers);
-router.patch('/users/:id/block', toggleBlockUser);
+router.post('/users', adminOnly, createUser);
+router.patch('/users/:id/role', adminOnly, updateUserRole);
+router.patch('/users/:id/reset-password', adminOnly, resetUserPassword);
+router.patch('/users/:id/block', adminOnly, toggleBlockUser);
+
+// Roles y módulos (solo admin)
+router.get('/modules', getModules);
+router.get('/roles', getRoles);
+router.post('/roles', adminOnly, createRole);
+router.put('/roles/:id', adminOnly, updateRole);
+router.delete('/roles/:id', adminOnly, deleteRole);
 router.get('/categories', getCategories);
 router.post('/categories', createCategory);
 router.put('/categories/:id', updateCategory);
