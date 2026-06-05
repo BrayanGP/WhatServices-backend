@@ -174,6 +174,11 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   const matchCategory = (q) => { const r = catFuse.search(q); return r.length ? r[0].item : null; };
   const servicesList = categories.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
 
+  // Servicios que SÍ tienen proveedores disponibles (no solo la categoría)
+  const provCats = await Provider.distinct('categories', { availability: 'available', isBlocked: false });
+  const availableCats = categories.filter((c) => provCats.includes(c.name));
+  const servicesAvailableList = availableCats.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
+
   const intentsDocs = await Intent.find({ active: true }).sort({ priority: -1 }).lean();
   const intentPhrases = [];
   intentsDocs.forEach((it) => (it.examples || []).forEach((ph) => intentPhrases.push({ intent: it, phrase: ph })));
@@ -208,6 +213,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     name: ctx.name, firstName, phone: ctx.phone, greeting,
     service: ctx.service || '', cp: ctx.cp || '',
     count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
+    servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
     date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
     ...ctx.vars,
   });
