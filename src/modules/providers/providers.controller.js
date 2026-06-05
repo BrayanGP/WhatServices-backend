@@ -52,18 +52,41 @@ const register = async (req, res, next) => {
   }
 };
 
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Búsqueda flexible (tipo "like", no exacta) — igual de tolerante que el formulario.
 const list = async (req, res, next) => {
   try {
     const { category, city, availability, cp, page = 1, limit = 10 } = req.query;
     const filter = { isBlocked: false };
-    if (category) filter.categories = category;
-    if (city) filter.city = new RegExp(city, 'i');
-    if (cp) filter.postalCode = cp;
+    const and = [];
+
+    // Servicio: coincidencia parcial e insensible a mayúsculas en categorías,
+    // especialidades, descripción o nombre del negocio.
+    if (category && String(category).trim()) {
+      const rx = new RegExp(escapeRegex(String(category).trim()), 'i');
+      and.push({ $or: [{ categories: rx }, { specialties: rx }, { description: rx }, { businessName: rx }] });
+    }
+
+    // Ubicación: se cumple si coincide la ciudad/dirección O el código postal (parcial).
+    const loc = [];
+    if (city && String(city).trim()) {
+      const rc = new RegExp(escapeRegex(String(city).trim()), 'i');
+      loc.push({ city: rc }, { address: rc });
+    }
+    if (cp && String(cp).trim()) {
+      loc.push({ postalCode: new RegExp('^' + escapeRegex(String(cp).trim())) });
+    }
+    if (loc.length) and.push({ $or: loc });
+
+    if (and.length) filter.$and = and;
     if (availability) filter.availability = availability;
 
     const skip = (Number(page) - 1) * Number(limit);
     const [providers, total] = await Promise.all([
-      Provider.find(filter).skip(skip).limit(Number(limit)).lean(),
+      Provider.find(filter)
+        .sort({ 'rating.average': -1, 'rating.count': -1, createdAt: -1 })
+        .skip(skip).limit(Number(limit)).lean(),
       Provider.countDocuments(filter),
     ]);
     res.json({ providers, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
