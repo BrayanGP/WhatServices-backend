@@ -124,7 +124,7 @@ const sendCatalog = async (conv, phone, providers, service, cp, cfg) => {
       `⭐ ${p.rating?.average || 0}/5 (${p.rating?.count || 0})` +
       `${p.city ? ` · ${p.city}` : ''}\n` +
       `💬 Contactar: ${contact}`;
-    const logo = photoUrl(p.profilePhoto);
+    const logo = photoUrl(p.profilePhoto) || photoUrl((p.photos || [])[0]);
     if (logo) {
       await sleep(REPLY_DELAY_MS); // retraso humano anti-baneo
       await sendMedia(phone, logo, caption, conv.instance);

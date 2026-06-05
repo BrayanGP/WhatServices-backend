@@ -2,6 +2,7 @@ const Fuse = require('fuse.js');
 const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
 const Intent = require('./intent.model');
+const { CLIENT_URL } = require('../../config/env');
 const {
   fill, getPostalCode, getScore, findProviders, startRequest, completeRequest,
   reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
@@ -212,6 +213,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   const firstName = String(ctx.name || '').trim().split(/\s+/)[0] || '';
   const dateStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, dateStyle: 'long' }).format(now);
   const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now);
+  const webBase = (CLIENT_URL || '').replace(/\/$/, '');
 
   // Variables propias definidas por el usuario (base, sobre-escribibles por las del sistema/capturadas)
   const customVars = {};
@@ -236,6 +238,8 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
       count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
       servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
       topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
+      web: webBase, webProviders: `${webBase}/providers`, webRegister: `${webBase}/unete`,
+      webService: `${webBase}/providers?category=${encodeURIComponent(ctx.service || '')}`,
       date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
       ...ctx.vars,
     };
@@ -356,7 +360,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
           ctx.resultsCount = providers.length;
         }
         cards = providers.map((p, i) => ({
-          image: photoUrl(p.profilePhoto),
+          image: photoUrl(p.profilePhoto) || photoUrl((p.photos || [])[0]),
           title: `${i + 1}. ${p.businessName}`,
           body: `⭐${p.rating?.average || 0}${p.city ? ` · ${p.city}` : ''}`,
         }));
