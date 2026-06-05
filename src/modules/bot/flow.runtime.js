@@ -229,16 +229,24 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     nearbyList = formatProviderList(ps); nearbyCount = ps.length;
   }
 
-  const fillVars = () => ({
-    ...customVars,
-    name: ctx.name, firstName, phone: ctx.phone, greeting,
-    service: ctx.service || '', cp: ctx.cp || '',
-    count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
-    servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
-    topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
-    date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
-    ...ctx.vars,
-  });
+  const fillVars = () => {
+    const sys = {
+      name: ctx.name, firstName, phone: ctx.phone, greeting,
+      service: ctx.service || '', cp: ctx.cp || '',
+      count: ctx.resultsCount || 0, services: servicesList, servicesCount: categories.length,
+      servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
+      topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
+      date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
+      ...ctx.vars,
+    };
+    // Resuelve variables propias (2 pasadas → pueden ser dinámicas y referenciar otras variables)
+    const out = {};
+    for (let pass = 0; pass < 2; pass++) {
+      for (const k in customVars) out[k] = fill(String(customVars[k] == null ? '' : customVars[k]), { ...sys, ...out });
+    }
+    Object.assign(out, sys); // sistema y capturadas ganan ante colisiones
+    return out;
+  };
 
   // ---- Punto de inicio: reanudar en un `ask` o empezar en `start` ----
   let current = null;
