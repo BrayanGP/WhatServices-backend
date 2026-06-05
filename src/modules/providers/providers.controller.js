@@ -2,6 +2,19 @@ const bcrypt = require('bcryptjs');
 const Provider = require('./provider.model');
 const User = require('../users/user.model');
 const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
+const { useCloudinary } = require('../../middleware/upload');
+const { BACKEND_PUBLIC_URL, PORT } = require('../../config/env');
+
+// Genera la URL pública de un archivo subido
+const fileUrl = (file) => {
+  if (useCloudinary) {
+    // Cloudinary devuelve la URL completa en f.path
+    return { url: file.path, publicId: file.filename };
+  }
+  // Disco local: construye URL pública con la base del backend
+  const base = BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
+  return { url: `${base}/uploads/${file.filename}`, publicId: file.filename };
+};
 
 // Registro de empleado/proveedor: crea usuario role 'provider' + perfil
 const register = async (req, res, next) => {
@@ -135,7 +148,7 @@ const uploadPhotos = async (req, res, next) => {
     if (provider.photos.length >= 5) {
       return res.status(400).json({ message: 'Maximum 5 photos allowed' });
     }
-    const newPhotos = req.files.map((f) => ({ url: f.path, publicId: f.filename }));
+    const newPhotos = req.files.map((f) => fileUrl(f));
     const allowed = 5 - provider.photos.length;
     provider.photos.push(...newPhotos.slice(0, allowed));
     await provider.save();
@@ -150,7 +163,7 @@ const uploadProfilePhoto = async (req, res, next) => {
     if (!req.file) return res.status(400).json({ message: 'No file' });
     const provider = await Provider.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
-      { profilePhoto: { url: req.file.path, publicId: req.file.filename } },
+      { profilePhoto: fileUrl(req.file) },
       { new: true }
     );
     if (!provider) return res.status(404).json({ message: 'Provider not found' });

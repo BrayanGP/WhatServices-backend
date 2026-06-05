@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
@@ -36,6 +37,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// Servir archivos subidos localmente (solo cuando Cloudinary no está configurado)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
