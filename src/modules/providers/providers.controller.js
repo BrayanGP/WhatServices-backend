@@ -1,8 +1,11 @@
 const bcrypt = require('bcryptjs');
 const Provider = require('./provider.model');
 const User = require('../users/user.model');
+const Otp = require('../auth/otp.model');
 const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
 const { fileUrl } = require('../../middleware/upload');
+
+const OTP_VERIFIED_TTL_MS = 30 * 60 * 1000; // el OTP verificado vale 30 min para completar el registro
 
 // Registro de empleado/proveedor: crea usuario role 'provider' + perfil
 const register = async (req, res, next) => {
@@ -18,6 +21,13 @@ const register = async (req, res, next) => {
     }
     if (!businessName || !city) {
       return res.status(400).json({ message: 'businessName y city son obligatorios' });
+    }
+
+    // Exigir teléfono verificado por OTP
+    const d10 = String(phone || '').replace(/\D/g, '').slice(-10);
+    const otp = await Otp.findOne({ phone: d10, purpose: 'register' });
+    if (!otp || !otp.verified || !otp.verifiedAt || (Date.now() - new Date(otp.verifiedAt).getTime() > OTP_VERIFIED_TTL_MS)) {
+      return res.status(403).json({ message: 'Verifica tu teléfono con el código antes de registrarte.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -39,6 +49,7 @@ const register = async (req, res, next) => {
       profile.location = { type: 'Point', coordinates: [Number(lng), Number(lat)] };
     }
     const provider = await Provider.create(profile);
+    await Otp.deleteOne({ phone: d10, purpose: 'register' }).catch(() => {}); // OTP de un solo uso
 
     const { accessToken, refreshToken } = signTokens(user);
     res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
