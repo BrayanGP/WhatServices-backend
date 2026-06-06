@@ -12,6 +12,8 @@ router.get(/^\/(.+)$/, async (req, res) => {
     const out = await s3Client.send(new GetObjectCommand({ Bucket: s3Bucket, Key: key }));
     res.set('Content-Type', out.ContentType || 'application/octet-stream');
     res.set('Cache-Control', 'public, max-age=86400');
+    // Conserva la disposición del objeto (p. ej. los PDF legales se descargan en vez de mostrarse).
+    if (out.ContentDisposition) res.set('Content-Disposition', out.ContentDisposition);
     if (out.ContentLength) res.set('Content-Length', String(out.ContentLength));
     out.Body.pipe(res);
   } catch (err) {
