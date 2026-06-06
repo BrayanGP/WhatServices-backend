@@ -175,14 +175,38 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
 
   // Datos de soporte (categorías + intenciones) para condiciones y matchService
   const categories = await Category.find({ isActive: true }).lean();
-  const catFuse = new Fuse(categories, { keys: ['name', 'slug'], threshold: 0.45, ignoreLocation: true });
-  const matchCategory = (q) => { const r = catFuse.search(q); return r.length ? r[0].item : null; };
   const servicesList = categories.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
 
-  // Servicios que SÍ tienen proveedores disponibles (no solo la categoría)
-  const provCats = await Provider.distinct('categories', { availability: 'available', isBlocked: false });
-  const availableCats = categories.filter((c) => provCats.includes(c.name));
+  // Servicios que SÍ tienen proveedores disponibles. Se toma de lo que el proveedor
+  // REALMENTE tiene guardado (tolerante a acentos/mayúsculas y a categorías que aún no
+  // están activas, p. ej. sugeridas en el alta), para no ocultar a nadie con proveedor.
+  const provCats = (await Provider.distinct('categories', { availability: 'available', isBlocked: false }))
+    .map((s) => String(s || '').trim()).filter(Boolean);
+  const catByKey = new Map();
+  categories.forEach((c) => {
+    catByKey.set(norm(c.name), c);
+    if (c.slug) catByKey.set(norm(c.slug), c);
+  });
+  const availableCats = [];
+  const seenAvail = new Set();
+  provCats.forEach((pc) => {
+    const cat = catByKey.get(norm(pc));
+    const name = cat ? cat.name : pc;      // sin categoría activa: usa el nombre tal cual del proveedor
+    const icon = cat ? (cat.icon || '') : '';
+    const key = norm(name);
+    if (!key || seenAvail.has(key)) return;
+    seenAvail.add(key);
+    availableCats.push({ name, icon });
+  });
   const servicesAvailableList = availableCats.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
+
+  // Corpus para reconocer el servicio: categorías activas + las que solo existen en
+  // proveedores disponibles (así un servicio que SÍ tiene proveedor siempre se reconoce
+  // y la búsqueda devuelve resultados con el nombre tal cual lo tiene el proveedor).
+  const matchCorpus = [...categories];
+  provCats.forEach((pc) => { if (!catByKey.has(norm(pc))) matchCorpus.push({ name: pc, slug: norm(pc) }); });
+  const catFuse = new Fuse(matchCorpus, { keys: ['name', 'slug'], threshold: 0.45, ignoreLocation: true });
+  const matchCategory = (q) => { const r = catFuse.search(q); return r.length ? r[0].item : null; };
 
   const intentsDocs = await Intent.find({ active: true }).sort({ priority: -1 }).lean();
   const intentPhrases = [];
