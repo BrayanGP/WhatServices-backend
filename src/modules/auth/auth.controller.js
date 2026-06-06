@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../users/user.model');
+const Otp = require('./otp.model');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
 const { modulesForUser } = require('../../utils/permissions');
@@ -209,4 +210,90 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, refresh, logout, me, updateProfile, changePassword, uploadAvatar, forgotPassword, resetPassword };
+// ----- OTP de registro (verificar teléfono antes de enrolarse) -----
+
+const OTP_TTL_MS = 5 * 60 * 1000;     // vigencia del código
+const OTP_BLOCK_MS = 10 * 60 * 1000;  // bloqueo tras fallos
+const OTP_MAX = 3;                      // intentos antes de bloquear
+
+const sendOtpInstance = async () => {
+  const s = await Setting.findOne({ key: 'activeInstance' }).lean();
+  return s?.value || evolution.DEFAULT_INSTANCE;
+};
+
+const registerSendOtp = async (req, res, next) => {
+  try {
+    const d10 = last10(req.body?.phone);
+    if (d10.length < 10) return res.status(400).json({ message: 'Teléfono inválido (10 dígitos)' });
+    const exists = await User.findOne({ phone: new RegExp(`${d10}$`) });
+    if (exists) return res.status(409).json({ message: 'Ya existe una cuenta con ese teléfono. Inicia sesión.' });
+
+    const now = Date.now();
+    let otp = await Otp.findOne({ phone: d10, purpose: 'register' });
+    if (otp?.blockedUntil && otp.blockedUntil.getTime() > now) {
+      return res.status(429).json({ message: 'Demasiados intentos. Intenta más tarde.', remainingMs: otp.blockedUntil.getTime() - now });
+    }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = await bcrypt.hash(code, 10);
+    const set = { phone: d10, purpose: 'register', codeHash, expiresAt: new Date(now + OTP_TTL_MS), verified: false, verifiedAt: null };
+    // si el bloqueo ya expiró (o no existía), reiniciamos intentos
+    if (!otp || (otp.blockedUntil && otp.blockedUntil.getTime() <= now)) { set.attempts = 0; set.blockedUntil = null; }
+    otp = await Otp.findOneAndUpdate({ phone: d10, purpose: 'register' }, set, { upsert: true, new: true });
+    try {
+      await evolution.sendText(waNumber(req.body.phone),
+        `🔐 Tu código de verificación para registrarte en *WhatServices* es: *${code}*\n\nVence en 5 minutos.`,
+        await sendOtpInstance());
+    } catch (e) { console.error('[otp] no se pudo enviar:', e.message); }
+    res.json({ ok: true, expiresInMs: OTP_TTL_MS });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const registerVerifyOtp = async (req, res, next) => {
+  try {
+    const { phone, code } = req.body || {};
+    const d10 = last10(phone);
+    const now = Date.now();
+    const otp = await Otp.findOne({ phone: d10, purpose: 'register' });
+    if (otp?.blockedUntil && otp.blockedUntil.getTime() > now) {
+      return res.status(429).json({ message: 'Bloqueado por intentos fallidos.', remainingMs: otp.blockedUntil.getTime() - now });
+    }
+    if (!otp || !otp.codeHash || !otp.expiresAt || otp.expiresAt.getTime() < now) {
+      return res.status(400).json({ message: 'El código expiró. Reenvíalo.' });
+    }
+    const ok = await bcrypt.compare(String(code || ''), otp.codeHash);
+    if (!ok) {
+      otp.attempts = (otp.attempts || 0) + 1;
+      let blocked = false;
+      if (otp.attempts >= OTP_MAX) { otp.blockedUntil = new Date(now + OTP_BLOCK_MS); blocked = true; }
+      await otp.save();
+      if (blocked) return res.status(429).json({ message: 'Demasiados intentos. Espera 10 minutos.', remainingMs: OTP_BLOCK_MS });
+      return res.status(400).json({ message: 'Código incorrecto', attemptsLeft: OTP_MAX - otp.attempts });
+    }
+    otp.verified = true; otp.verifiedAt = new Date(); otp.attempts = 0; otp.codeHash = undefined; otp.blockedUntil = null;
+    await otp.save();
+    res.json({ ok: true, verified: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Estado del bloqueo/verificación (para restaurar el timer al recargar la página)
+const registerOtpStatus = async (req, res, next) => {
+  try {
+    const d10 = last10(req.query.phone);
+    if (d10.length < 10) return res.json({ blocked: false, verified: false, remainingMs: 0 });
+    const otp = await Otp.findOne({ phone: d10, purpose: 'register' }).lean();
+    const now = Date.now();
+    const remainingMs = otp?.blockedUntil ? Math.max(0, otp.blockedUntil.getTime() - now) : 0;
+    res.json({ blocked: remainingMs > 0, remainingMs, verified: !!otp?.verified });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  register, login, refresh, logout, me, updateProfile, changePassword, uploadAvatar,
+  forgotPassword, resetPassword, registerSendOtp, registerVerifyOtp, registerOtpStatus,
+};
