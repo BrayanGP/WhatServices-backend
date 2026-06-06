@@ -15,6 +15,8 @@ const botRoutes = require('./modules/bot/bot.routes');
 const waRoutes = require('./modules/wa/wa.routes');
 const categoryRoutes = require('./modules/categories/categories.routes');
 const fileRoutes = require('./modules/files/files.routes');
+const legalRoutes = require('./modules/legal/legal.routes');
+const { ensureLegalDocs } = require('./modules/legal/legal.service');
 
 const app = express();
 
@@ -63,12 +65,23 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/bot', botRoutes);
 app.use('/wa', waRoutes);
 app.use('/files', fileRoutes);
+// Documentos legales: públicos en /legal (descargas sin API key) y alias bajo /api para el front.
+app.use('/legal', legalRoutes);
+app.use('/api/legal', legalRoutes);
 
 app.use(errorHandler);
 
 connectDB()
   .then(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    // Sube los documentos legales (Términos y Aviso de Privacidad) al bucket si no existen
+    // e imprime sus URLs públicas. No bloquea el arranque si algo falla.
+    ensureLegalDocs()
+      .then((docs) => {
+        console.log('[legal] Términos y Condiciones:', docs.terms.url);
+        console.log('[legal] Aviso de Privacidad:', docs.privacy.url);
+      })
+      .catch((err) => console.error('[legal] error preparando documentos:', err.message));
     // Keep-alive: evita que el servicio se duerma por inactividad (causa de "no contesta al primer mensaje").
     if (BACKEND_PUBLIC_URL && process.env.KEEP_ALIVE !== 'false') {
       const url = `${BACKEND_PUBLIC_URL.replace(/\/$/, '')}/health`;
