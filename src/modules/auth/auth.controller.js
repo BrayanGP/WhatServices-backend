@@ -24,12 +24,16 @@ const signTokens = (user) => {
 
 const register = async (req, res, next) => {
   try {
-    const { name, phone, email, password } = req.body;
+    const { name, phone, email, password, acceptedTerms, termsVersion } = req.body;
     if (!password || password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, phone, email, passwordHash });
+    // Registra la aceptación de Términos y Condiciones si el formulario la envía.
+    const terms = acceptedTerms
+      ? { acceptedTerms: true, termsAcceptedAt: new Date(), termsVersion: termsVersion || '1.0' }
+      : {};
+    const user = await User.create({ name, phone, email, passwordHash, ...terms });
     const { accessToken, refreshToken } = signTokens(user);
     res.cookie('refreshToken', refreshToken, { ...COOKIE_OPTS, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.status(201).json({
