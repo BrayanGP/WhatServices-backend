@@ -17,6 +17,7 @@ const categoryRoutes = require('./modules/categories/categories.routes');
 const fileRoutes = require('./modules/files/files.routes');
 const legalRoutes = require('./modules/legal/legal.routes');
 const { ensureLegalDocs } = require('./modules/legal/legal.service');
+const { ensureDefaultCategories } = require('./modules/categories/categories.service');
 
 const app = express();
 
@@ -74,6 +75,8 @@ app.use(errorHandler);
 connectDB()
   .then(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    // Garantiza que haya categorías visibles al público (siembra por defecto si no hay ninguna activa).
+    ensureDefaultCategories();
     // Sube los documentos legales (Términos y Aviso de Privacidad) al bucket si no existen
     // e imprime sus URLs públicas. No bloquea el arranque si algo falla.
     ensureLegalDocs()
