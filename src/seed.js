@@ -4,17 +4,7 @@ const bcrypt = require('bcryptjs');
 const connectDB = require('./config/db');
 const User = require('./modules/users/user.model');
 const Category = require('./modules/admin/category.model');
-
-const DEFAULT_CATEGORIES = [
-  { name: 'Carpinteros', slug: 'carpinteros', icon: '🪚' },
-  { name: 'Plomeros', slug: 'plomeros', icon: '🔧' },
-  { name: 'Herreros', slug: 'herreros', icon: '⚒️' },
-  { name: 'Soldadores', slug: 'soldadores', icon: '🔦' },
-  { name: 'Electricistas', slug: 'electricistas', icon: '⚡' },
-  { name: 'Albañiles', slug: 'albaniles', icon: '🧱' },
-  { name: 'Pintores', slug: 'pintores', icon: '🎨' },
-  { name: 'Técnicos', slug: 'tecnicos', icon: '🔌' },
-];
+const { DEFAULT_CATEGORIES } = require('./modules/categories/default-categories');
 
 const seed = async () => {
   await connectDB();
