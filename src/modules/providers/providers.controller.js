@@ -14,6 +14,7 @@ const register = async (req, res, next) => {
       name, email, phone, password,
       businessName, ownerName, city, postalCode, address, description,
       categories = [], specialties = [], lat, lng,
+      acceptedTerms, termsVersion, acceptedPrivacy, privacyVersion,
     } = req.body;
 
     if (!password || password.length < 6) {
@@ -21,6 +22,10 @@ const register = async (req, res, next) => {
     }
     if (!businessName || !city) {
       return res.status(400).json({ message: 'businessName y city son obligatorios' });
+    }
+    // El usuario debe aceptar los Términos y Condiciones y el Aviso de Privacidad para registrarse.
+    if (!acceptedTerms || !acceptedPrivacy) {
+      return res.status(400).json({ message: 'Debes aceptar los Términos y Condiciones y el Aviso de Privacidad para continuar.' });
     }
 
     // Exigir teléfono verificado por OTP
@@ -31,7 +36,12 @@ const register = async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name: name || ownerName, email, phone, passwordHash, role: 'provider' });
+    const now = new Date();
+    const user = await User.create({
+      name: name || ownerName, email, phone, passwordHash, role: 'provider',
+      acceptedTerms: true, termsAcceptedAt: now, termsVersion: termsVersion || '1.0',
+      acceptedPrivacy: true, privacyAcceptedAt: now, privacyVersion: privacyVersion || '1.0',
+    });
 
     const profile = {
       userId: user._id,

@@ -24,12 +24,20 @@ const signTokens = (user) => {
 
 const register = async (req, res, next) => {
   try {
-    const { name, phone, email, password } = req.body;
+    const { name, phone, email, password, acceptedTerms, termsVersion, acceptedPrivacy, privacyVersion } = req.body;
     if (!password || password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, phone, email, passwordHash });
+    // Registra la aceptación de Términos/Privacidad si el formulario las envía (el alta por admin no las manda).
+    const consent = {};
+    if (acceptedTerms) {
+      consent.acceptedTerms = true; consent.termsAcceptedAt = new Date(); consent.termsVersion = termsVersion || '1.0';
+    }
+    if (acceptedPrivacy) {
+      consent.acceptedPrivacy = true; consent.privacyAcceptedAt = new Date(); consent.privacyVersion = privacyVersion || '1.0';
+    }
+    const user = await User.create({ name, phone, email, passwordHash, ...consent });
     const { accessToken, refreshToken } = signTokens(user);
     res.cookie('refreshToken', refreshToken, { ...COOKIE_OPTS, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.status(201).json({
