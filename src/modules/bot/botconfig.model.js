@@ -14,7 +14,8 @@ const DEFAULTS = {
     '👉 Responde con el *número (1-{count})* para ver los *trabajos* de ese profesional.\nEscribe *otro* para una nueva búsqueda.\n\n🌐 O explóralos todos aquí:\n{link}',
   worksIntro: 'Estos son algunos *trabajos de {business}* 👷',
   noWorks: '*{business}* aún no ha subido fotos de sus trabajos. 📷\n\nPuedes contactarlo aquí: {contact}',
-  worksNav: '¿Qué quieres hacer?\n• Escribe *volver* para regresar a la lista\n• Escribe *otro* para una nueva búsqueda',
+  worksNav: '¿Qué quieres hacer?\n• Escribe *volver* para regresar a la lista\n• Escribe *otro* para una nueva búsqueda\n• Escribe *salir* para terminar',
+  goodbye: '¡Gracias por usar *WhatServices*! 👋\n\nCuando quieras buscar otro servicio, solo escribe *hola* y empezamos de nuevo.',
 };
 
 const botConfigSchema = new mongoose.Schema({
@@ -34,6 +35,7 @@ const botConfigSchema = new mongoose.Schema({
     worksIntro: { type: String, default: DEFAULTS.worksIntro },
     noWorks: { type: String, default: DEFAULTS.noWorks },
     worksNav: { type: String, default: DEFAULTS.worksNav },
+    goodbye: { type: String, default: DEFAULTS.goodbye },
   },
   hours: {
     enabled: { type: Boolean, default: false },
