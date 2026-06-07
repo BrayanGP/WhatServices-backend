@@ -162,6 +162,35 @@ const processIncoming = async (msg, instance) => {
       return;
     }
 
+    // ---- Comandos globales: terminar o reiniciar con un saludo ----
+    // Funcionan en cualquier punto, tanto con el flujo visual como con la FSM.
+    const cleaned = lower.trim();
+    // "salir", "finalizar", "terminar", etc. (mensaje compuesto solo por el comando)
+    const isExitCmd = /^(?:ya\s+)?(?:salir|finalizar|finaliza|finalizado|terminar|termina|terminado|cancelar|cancela|cancelado|fin|adi[oó]s|chao|chau|bye|hasta\s+luego|hasta\s+pronto)[.!\s]*$/i.test(cleaned);
+    // saludo / reinicio: "hola", "buenas", "buenos días", "menú inicio", "reiniciar", etc.
+    const isGreeting = /^(?:hola+|holi|holis|ola|buenas?(?:\s+(?:d[ií]as|tardes|noches))?|buenos?\s+d[ií]as|hey|hi|hello|saludos|qu[eé]\s+tal|qu[ieé]bole|inicio|reiniciar|empezar|comenzar)[.!\s]*$/i.test(cleaned);
+
+    if (isExitCmd) {
+      conv.step = 'END';
+      conv.selectedService = undefined;
+      conv.suggestedProviders = [];
+      conv.postalCode = undefined;
+      conv.context = {};
+      conv.markModified('context');
+      await reply(conv, phone, fill(cfg.messages.goodbye, { name: conv.name || name || '' }));
+      await conv.save();
+      return;
+    }
+    if (isGreeting) {
+      // Reinicia la conversación desde cero; abajo el flujo/FSM mostrará la bienvenida.
+      conv.step = 'IDLE';
+      conv.selectedService = undefined;
+      conv.suggestedProviders = [];
+      conv.postalCode = undefined;
+      conv.context = {};
+      conv.markModified('context');
+    }
+
     // ---- Flujo visual publicado (opt-in): si existe, lo ejecuta el motor ----
     const flow = await BotFlow.getPublished();
     if (flow) {
