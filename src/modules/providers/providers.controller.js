@@ -76,8 +76,12 @@ const register = async (req, res, next) => {
       categories,
       specialties,
     };
-    if (lat != null && lng != null) {
-      profile.location = { type: 'Point', coordinates: [Number(lng), Number(lat)] };
+    // Solo guardamos ubicación si hay coordenadas numéricas válidas (p. ej. cuando el
+    // proveedor eligió una sugerencia o usó GPS). Si escribió la dirección a mano sin
+    // seleccionar, se guarda igual: simplemente sin coordenadas (no se rompe el alta).
+    const latN = Number(lat), lngN = Number(lng);
+    if (Number.isFinite(latN) && Number.isFinite(lngN)) {
+      profile.location = { type: 'Point', coordinates: [lngN, latN] };
     }
     let provider;
     try {
