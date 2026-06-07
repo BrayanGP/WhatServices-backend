@@ -187,18 +187,27 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
     catByKey.set(norm(c.name), c);
     if (c.slug) catByKey.set(norm(c.slug), c);
   });
+  // Mapa de iconos de TODAS las categorías (incluidas las no activas/sugeridas),
+  // para que cada servicio disponible muestre su emoji aunque su categoría aún no esté activa.
+  const iconByKey = new Map();
+  (await Category.find({}).select('name slug icon').lean()).forEach((c) => {
+    if (!c.icon) return;
+    iconByKey.set(norm(c.name), c.icon);
+    if (c.slug) iconByKey.set(norm(c.slug), c.icon);
+  });
   const availableCats = [];
   const seenAvail = new Set();
   provCats.forEach((pc) => {
     const cat = catByKey.get(norm(pc));
     const name = cat ? cat.name : pc;      // sin categoría activa: usa el nombre tal cual del proveedor
-    const icon = cat ? (cat.icon || '') : '';
+    // Emoji: el de la categoría activa → el de la categoría sugerida → uno por defecto.
+    const icon = (cat && cat.icon) || iconByKey.get(norm(pc)) || iconByKey.get(norm(name)) || '🔧';
     const key = norm(name);
     if (!key || seenAvail.has(key)) return;
     seenAvail.add(key);
     availableCats.push({ name, icon });
   });
-  const servicesAvailableList = availableCats.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
+  const servicesAvailableList = availableCats.map((c) => `• ${c.icon || '🔧'} ${c.name}`.trim()).join('\n');
 
   // Corpus para reconocer el servicio: categorías activas + las que solo existen en
   // proveedores disponibles (así un servicio que SÍ tiene proveedor siempre se reconoce
