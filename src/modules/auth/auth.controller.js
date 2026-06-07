@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../users/user.model');
+const Provider = require('../providers/provider.model');
 const Otp = require('./otp.model');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
@@ -233,8 +234,16 @@ const registerSendOtp = async (req, res, next) => {
   try {
     const d10 = last10(req.body?.phone);
     if (d10.length < 10) return res.status(400).json({ message: 'Teléfono inválido (10 dígitos)' });
-    const exists = await User.findOne({ phone: new RegExp(`${d10}$`) });
-    if (exists) return res.status(409).json({ message: 'Ya existe una cuenta con ese teléfono. Inicia sesión.' });
+    const existing = await User.findOne({ phone: new RegExp(`${d10}$`) });
+    if (existing) {
+      // Se bloquea solo si ya hay una cuenta utilizable: otro tipo de cuenta,
+      // o un proveedor que YA tiene su perfil. Si quedó un registro incompleto
+      // (proveedor sin perfil), se permite reanudar verificando el teléfono.
+      const hasProvider = existing.role === 'provider' && (await Provider.exists({ userId: existing._id }));
+      if (existing.role !== 'provider' || hasProvider) {
+        return res.status(409).json({ message: 'Ya existe una cuenta con ese teléfono. Inicia sesión.' });
+      }
+    }
 
     const now = Date.now();
     let otp = await Otp.findOne({ phone: d10, purpose: 'register' });

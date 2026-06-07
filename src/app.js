@@ -16,6 +16,7 @@ const waRoutes = require('./modules/wa/wa.routes');
 const categoryRoutes = require('./modules/categories/categories.routes');
 const fileRoutes = require('./modules/files/files.routes');
 const legalRoutes = require('./modules/legal/legal.routes');
+const geoRoutes = require('./modules/geo/geo.routes');
 const { ensureLegalDocs } = require('./modules/legal/legal.service');
 const { ensureDefaultCategories } = require('./modules/categories/categories.service');
 
@@ -60,6 +61,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/geo', geoRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);

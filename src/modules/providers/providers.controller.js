@@ -37,11 +37,32 @@ const register = async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const now = new Date();
-    const user = await User.create({
-      name: name || ownerName, email, phone, passwordHash, role: 'provider',
+    const consent = {
       acceptedTerms: true, termsAcceptedAt: now, termsVersion: termsVersion || '1.0',
       acceptedPrivacy: true, privacyAcceptedAt: now, privacyVersion: privacyVersion || '1.0',
-    });
+    };
+
+    // ¿Ya hay un usuario con ese teléfono? Puede ser un registro previo que quedó a medias.
+    let user = await User.findOne({ phone: new RegExp(`${d10}$`) });
+    let createdUser = false;
+    if (user) {
+      const hasProvider = await Provider.exists({ userId: user._id });
+      if (hasProvider) {
+        return res.status(409).json({ message: 'Ya tienes una cuenta registrada con este teléfono. Inicia sesión.' });
+      }
+      if (user.role !== 'provider') {
+        return res.status(409).json({ message: 'Este teléfono ya está asociado a otra cuenta. Inicia sesión.' });
+      }
+      // Registro incompleto: reanudamos con los datos nuevos.
+      user.name = name || ownerName || user.name;
+      if (email) user.email = email;
+      user.passwordHash = passwordHash;
+      Object.assign(user, consent);
+      await user.save();
+    } else {
+      user = await User.create({ name: name || ownerName, email, phone, passwordHash, role: 'provider', ...consent });
+      createdUser = true;
+    }
 
     const profile = {
       userId: user._id,
@@ -58,7 +79,14 @@ const register = async (req, res, next) => {
     if (lat != null && lng != null) {
       profile.location = { type: 'Point', coordinates: [Number(lng), Number(lat)] };
     }
-    const provider = await Provider.create(profile);
+    let provider;
+    try {
+      provider = await Provider.create(profile);
+    } catch (e) {
+      // Evita dejar un usuario huérfano (sin perfil) si la creación del perfil falla.
+      if (createdUser) await User.deleteOne({ _id: user._id }).catch(() => {});
+      throw e;
+    }
     await Otp.deleteOne({ phone: d10, purpose: 'register' }).catch(() => {}); // OTP de un solo uso
 
     const { accessToken, refreshToken } = signTokens(user);
