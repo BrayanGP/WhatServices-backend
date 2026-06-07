@@ -22,11 +22,18 @@ const { ensureDefaultCategories } = require('./modules/categories/categories.ser
 
 const app = express();
 
-const allowlist = [CLIENT_URL, ADMIN_URL].filter(Boolean);
+// CLIENT_URL y ADMIN_URL aceptan varias URLs separadas por coma (dominio propio + URL pública, etc.)
+// y se normalizan quitando la barra final (el header Origin nunca la trae).
+const splitUrls = (s) => String(s || '').split(',').map((u) => u.trim().replace(/\/$/, '')).filter(Boolean);
+const allowlist = [...splitUrls(CLIENT_URL), ...splitUrls(ADMIN_URL)];
+const isAllowedOrigin = (origin) => {
+  const o = String(origin).replace(/\/$/, '');
+  return allowlist.includes(o) || /\.up\.railway\.app$/.test(o);
+};
 app.use(cors({
   origin(origin, callback) {
     // permitir sin origin (curl, server-to-server, apps móviles), los dominios configurados y *.up.railway.app
-    if (!origin || allowlist.includes(origin) || /\.up\.railway\.app$/.test(origin)) {
+    if (!origin || isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(null, false); // origen no permitido → el navegador bloquea
