@@ -234,20 +234,83 @@ const updateCategory = async (req, res, next) => {
   }
 };
 
-// Aprobar o rechazar una categoría sugerida
+// Proveedores que tienen asignada una categoría (por nombre). Para detectar conflictos.
+const providersWithCategory = (name) =>
+  Provider.find({ categories: name })
+    .select('businessName ownerName phone categories isVerified profilePhoto city')
+    .lean();
+
+// Aprobar, rechazar o reactivar una categoría sugerida
 const reviewCategory = async (req, res, next) => {
   try {
     const { action } = req.body; // 'approve' | 'reject'
     if (!['approve', 'reject'].includes(action)) {
       return res.status(400).json({ message: 'action debe ser "approve" o "reject"' });
     }
-    const update = action === 'approve'
-      ? { status: 'active', isActive: true }
-      : { status: 'rejected', isActive: false };
-
-    const category = await Category.findByIdAndUpdate(req.params.id, update, { new: true });
+    const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ message: 'Category not found' });
+
+    if (action === 'reject') {
+      // No se puede rechazar si hay proveedores usándola: hay que reasignarlos primero.
+      const providers = await providersWithCategory(category.name);
+      if (providers.length) {
+        return res.status(409).json({
+          message: `No se puede rechazar "${category.name}": ${providers.length} proveedor(es) la tienen asignada. Reasígnalos primero.`,
+          conflict: 'providers',
+          category,
+          providers,
+        });
+      }
+      category.status = 'rejected';
+      category.isActive = false;
+    } else {
+      // approve = aprobar pendiente o reactivar una rechazada
+      category.status = 'active';
+      category.isActive = true;
+    }
+    await category.save();
     res.json(category);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Eliminar una categoría (solo si ningún proveedor la usa)
+const deleteCategory = async (req, res, next) => {
+  try {
+    const category = await Category.findById(req.params.id);
+    if (!category) return res.status(404).json({ message: 'Category not found' });
+    const providers = await providersWithCategory(category.name);
+    if (providers.length) {
+      return res.status(409).json({
+        message: `No se puede eliminar "${category.name}": ${providers.length} proveedor(es) la tienen asignada. Reasígnalos primero.`,
+        conflict: 'providers',
+        category,
+        providers,
+      });
+    }
+    await category.deleteOne();
+    res.json({ ok: true, deleted: category._id });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Cambiar los giros/oficios (categorías) de un proveedor desde el admin
+const updateProviderCategories = async (req, res, next) => {
+  try {
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ message: 'categories debe ser un arreglo' });
+    }
+    const clean = categories.map((c) => String(c).trim()).filter(Boolean);
+    const provider = await Provider.findByIdAndUpdate(
+      req.params.id,
+      { categories: clean },
+      { new: true },
+    ).lean();
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    res.json(provider);
   } catch (err) {
     next(err);
   }
@@ -853,11 +916,11 @@ const deleteRole = async (req, res, next) => {
 };
 
 module.exports = {
-  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
+  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider, updateProviderCategories,
   createUser, updateUserRole, resetUserPassword,
   getModules, getRoles, createRole, updateRole, deleteRole,
   getUsers, toggleBlockUser,
-  getCategories, createCategory, updateCategory, reviewCategory,
+  getCategories, createCategory, updateCategory, reviewCategory, deleteCategory,
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
