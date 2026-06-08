@@ -71,7 +71,13 @@ const waNumber = (phone) => {
 
 // Link de contacto: SIEMPRE directo al WhatsApp del proveedor (wa.me genera vista previa;
 // el link al backend /wa/choose no renderiza en WhatsApp). La solicitud se registra igual con startRequest.
-const buildContact = (conv, p) => `https://wa.me/${waNumber(p.phone)}`;
+const buildContact = (conv, p) => {
+  const num = waNumber(p.phone);
+  const service = conv.selectedService ? ` de ${conv.selectedService}` : '';
+  const negocio = p.businessName ? ` (${p.businessName})` : '';
+  const saludo = `¡Hola${negocio}! 👋 Te contacto desde WhatServices. Me interesa tu servicio${service}. ¿Tienes disponibilidad? 😊`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(saludo)}`;
+};
 
 const photoUrl = (ph) => (typeof ph === 'string' ? ph : ph?.url || '');
 
