@@ -137,25 +137,8 @@ const sendCatalog = async (conv, phone, providers, service, cp, cfg) => {
 // Menu de navegacion tras mostrar resultados: lista interactiva (best-effort) + texto SIEMPRE
 const sendResultsNav = async (conv, phone, providers, service, cp, cfg) => {
   const link = `${CLIENT_URL}/providers?category=${encodeURIComponent(service)}${cp ? `&cp=${cp}` : ''}`;
-  if (cfg.useButtons) {
-    const rows = providers.map((p, i) => ({
-      title: `${i + 1}. ${p.businessName}`.slice(0, 24),
-      description: `⭐ ${p.rating?.average || 0}/5${p.city ? ` · ${p.city}` : ''}`.slice(0, 72),
-      rowId: `works:${p._id}`,
-    }));
-    rows.push({ title: '🔄 Otro servicio', description: 'Nueva búsqueda', rowId: 'menu' });
-    await sleep(REPLY_DELAY_MS);
-    try {
-      await sendList(phone, {
-        title: 'Ver trabajos',
-        description: 'Elige un profesional para ver fotos de sus trabajos.',
-        buttonText: 'Ver opciones',
-        footerText: 'WhatServices',
-        sections: [{ title: service, rows }],
-      }, conv.instance);
-    } catch (e) { /* si no renderiza, queda el texto */ }
-  }
-  // fallback de texto SIEMPRE (responder por numero funciona aunque no haya botones)
+  // Solo texto: WhatsApp (Meta/Baileys) no renderiza listas/botones de forma fiable
+  // (dejaban un mensaje "No se pudo cargar"). Responder por número funciona igual.
   await reply(conv, phone, fill(cfg.messages.resultsHint, { count: providers.length, link }));
 };
 
@@ -174,19 +157,7 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
   } else {
     await reply(conv, phone, fill(cfg.messages.noWorks, { business: provider.businessName, contact }));
   }
-  if (cfg.useButtons) {
-    await sleep(REPLY_DELAY_MS);
-    try {
-      await sendButtons(phone, {
-        description: '¿Qué deseas hacer?',
-        footer: 'WhatServices',
-        buttons: [
-          { type: 'reply', displayText: '🔙 Volver a la lista', id: 'back' },
-          { type: 'reply', displayText: '🔄 Otro servicio', id: 'menu' },
-        ],
-      }, conv.instance);
-    } catch (e) { /* fallback de texto abajo */ }
-  }
+  // Solo texto: los botones no renderizan en WhatsApp (dejaban "No se pudo cargar").
   await reply(conv, phone, fill(cfg.messages.worksNav));
 };
 
