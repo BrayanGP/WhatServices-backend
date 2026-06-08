@@ -69,11 +69,9 @@ const waNumber = (phone) => {
   return d.length === 10 ? `52${d}` : d;
 };
 
-// Link de contacto: pasa por el backend para registrar la eleccion del cliente y redirige al WhatsApp del proveedor.
-const buildContact = (conv, p) =>
-  (BACKEND_PUBLIC_URL && conv.currentRequestId)
-    ? `${BACKEND_PUBLIC_URL.replace(/\/$/, '')}/wa/choose/${conv.currentRequestId}/${p._id}`
-    : `https://wa.me/${waNumber(p.phone)}`;
+// Link de contacto: SIEMPRE directo al WhatsApp del proveedor (wa.me genera vista previa;
+// el link al backend /wa/choose no renderiza en WhatsApp). La solicitud se registra igual con startRequest.
+const buildContact = (conv, p) => `https://wa.me/${waNumber(p.phone)}`;
 
 const photoUrl = (ph) => (typeof ph === 'string' ? ph : ph?.url || '');
 

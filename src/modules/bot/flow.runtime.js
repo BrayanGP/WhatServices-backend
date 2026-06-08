@@ -265,6 +265,10 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   }
 
   const fillVars = () => {
+    // Link "ver en la web": si hay UN solo resultado → perfil directo; si hay varios/ninguno → búsqueda por categoría
+    const _results = conv.suggestedProviders || [];
+    const _searchUrl = `${webBase}/providers?category=${encodeURIComponent(ctx.service || '')}`;
+    const _profileUrl = _results.length === 1 ? `${webBase}/providers/${_results[0]}` : _searchUrl;
     const sys = {
       name: ctx.name, firstName, phone: ctx.phone, greeting,
       service: ctx.service || '', cp: ctx.cp || '',
@@ -272,7 +276,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
       servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
       topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
       web: webBase, webProviders: `${webBase}/providers`, webRegister: `${webBase}/unete`,
-      webService: `${webBase}/providers?category=${encodeURIComponent(ctx.service || '')}`,
+      webService: _profileUrl, webProfile: _profileUrl,
       date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
       ...ctx.vars,
     };
