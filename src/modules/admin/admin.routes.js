@@ -3,7 +3,8 @@ const router = express.Router();
 const {
   getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
   getUsers, toggleBlockUser,
-  getCategories, createCategory, updateCategory, reviewCategory,
+  getCategories, createCategory, updateCategory, reviewCategory, deleteCategory,
+  updateProviderCategories,
   getConversations, getConversation, toggleTakeover, replyConversation,
   listInstances, createInstance, connectInstance, instanceState,
   logoutInstance, deleteInstance, setActiveInstance,
@@ -28,6 +29,7 @@ router.get('/providers', getProviders);
 router.patch('/providers/:id/reset-password', resetProviderPassword);
 router.patch('/providers/:id/verify', toggleVerify);
 router.patch('/providers/:id/block', toggleBlockProvider);
+router.patch('/providers/:id/categories', updateProviderCategories);
 
 router.get('/users', getUsers);
 router.post('/users', adminOnly, createUser);
@@ -45,6 +47,7 @@ router.get('/categories', getCategories);
 router.post('/categories', createCategory);
 router.put('/categories/:id', updateCategory);
 router.patch('/categories/:id/review', reviewCategory);
+router.delete('/categories/:id', deleteCategory);
 
 router.get('/conversations', getConversations);
 router.get('/conversations/:id', getConversation);
