@@ -198,8 +198,11 @@ const sendServicesList = async (conv, phone, cfg) => {
 // Muestra al profesional (tarjeta: logo + datos + contacto) + sus trabajos + navegacion.
 const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const contact = buildContact(conv, provider);
-  // Tarjeta del profesional (logo de perfil + nombre + calificación + ciudad + contacto)
-  const head = `*${provider.businessName}*\n⭐ ${provider.rating?.average || 0}/5 (${provider.rating?.count || 0})${provider.city ? ` · ${provider.city}` : ''}\n💬 Contactar: ${contact}`;
+  // Link al perfil público del proveedor en el portal (toma el primer CLIENT_URL si hay varios)
+  const web = String(CLIENT_URL || '').split(',')[0].trim().replace(/\/$/, '');
+  const profile = web ? `\n👤 Ver su perfil: ${web}/providers/${provider._id}` : '';
+  // Tarjeta del profesional (logo de perfil + nombre + calificación + ciudad + contacto + perfil)
+  const head = `*${provider.businessName}*\n⭐ ${provider.rating?.average || 0}/5 (${provider.rating?.count || 0})${provider.city ? ` · ${provider.city}` : ''}\n💬 Contactar: ${contact}${profile}`;
   const logo = photoUrl(provider.profilePhoto);
   if (logo) { await sendMedia(phone, logo, head, conv.instance); saveMsg(conv, 'bot', `[perfil] ${head}`); }
   else await reply(conv, phone, head);

@@ -137,6 +137,17 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
     return 'found';
   }
 
+  // Lista de proveedores en TEXTO PLANO (numerada). El cliente responde con el número.
+  if (action === 'sendResultsText') {
+    const providers = await orderedProviders(conv);
+    if (!providers.length) return 'empty';
+    const mode = ctx.vars.searchMode || params.mode || 'score';
+    const lines = formatProviderList(providers);
+    await reply(conv, phone, `👇 Estos son los profesionales de *${ctx.service}*:\n\n${lines}\n\n👉 Responde con el *número* del que quieres ver (ej. *1*).\n🔄 Escribe *otro* para otra búsqueda o *salir* para terminar.`);
+    await completeRequest(conv, providers, mode);
+    return 'found';
+  }
+
   // Solo la LISTA interactiva de proveedores (sin enviar las 5 fotos). Al elegir, showWorks muestra al profesional.
   if (action === 'sendResults') {
     const providers = await orderedProviders(conv);
