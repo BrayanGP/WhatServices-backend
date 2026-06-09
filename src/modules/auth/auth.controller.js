@@ -5,6 +5,7 @@ const Provider = require('../providers/provider.model');
 const Otp = require('./otp.model');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
+const meta = require('../../utils/whatsappMeta');
 const { modulesForUser } = require('../../utils/permissions');
 const { fileUrl } = require('../../middleware/upload');
 const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env');
@@ -174,13 +175,8 @@ const forgotPassword = async (req, res, next) => {
       user.resetCodeAttempts = 0;
       await user.save();
       try {
-        const s = await Setting.findOne({ key: 'activeInstance' }).lean();
-        const instance = s?.value || evolution.DEFAULT_INSTANCE;
-        await evolution.sendText(
-          waNumber(req.body.phone),
-          `🔐 Tu código para restablecer tu contraseña en *WhatServices* es: *${code}*\n\nVence en 5 minutos. Si no fuiste tú, ignora este mensaje.`,
-          instance,
-        );
+        // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
+        await meta.sendOtp(req.body.phone, code);
       } catch (e) { console.error('[forgotPassword] no se pudo enviar código:', e.message); }
     }
     res.json({ ok: true });
@@ -257,9 +253,8 @@ const registerSendOtp = async (req, res, next) => {
     if (!otp || (otp.blockedUntil && otp.blockedUntil.getTime() <= now)) { set.attempts = 0; set.blockedUntil = null; }
     otp = await Otp.findOneAndUpdate({ phone: d10, purpose: 'register' }, set, { upsert: true, new: true });
     try {
-      await evolution.sendText(waNumber(req.body.phone),
-        `🔐 Tu código de verificación para registrarte en *WhatServices* es: *${code}*\n\nVence en 5 minutos.`,
-        await sendOtpInstance());
+      // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
+      await meta.sendOtp(req.body.phone, code);
     } catch (e) { console.error('[otp] no se pudo enviar:', e.message); }
     res.json({ ok: true, expiresInMs: OTP_TTL_MS });
   } catch (err) {

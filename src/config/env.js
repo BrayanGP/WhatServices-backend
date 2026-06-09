@@ -38,4 +38,11 @@ module.exports = {
   BACKEND_PUBLIC_URL: process.env.BACKEND_PUBLIC_URL,
   // API key que deben enviar los fronts (header x-api-key). Si no se define, la protección queda desactivada.
   API_KEY: process.env.API_KEY,
+
+  // ---- WhatsApp Cloud API (Meta) ----
+  WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || '',
+  WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+  GRAPH_API_VERSION: process.env.GRAPH_API_VERSION || 'v25.0',
+  OTP_TEMPLATE_NAME: process.env.OTP_TEMPLATE_NAME || 'otp_verificacion',
+  TEMPLATE_LANG: process.env.TEMPLATE_LANG || 'es_MX',
 };
