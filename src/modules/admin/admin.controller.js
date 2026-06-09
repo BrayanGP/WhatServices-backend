@@ -372,8 +372,18 @@ const replyConversation = async (req, res, next) => {
     const conv = await Conversation.findById(req.params.id);
     if (!conv) return res.status(404).json({ message: 'Conversation not found' });
 
-    // Respuesta del agente por WhatsApp Cloud API (Meta). Texto libre válido
-    // dentro de la ventana de 24 h del cliente (toma de control humano).
+    // Anti-baneo: Meta NO permite texto libre fuera de la ventana de 24 h.
+    // La ventana se mide desde el ÚLTIMO mensaje del CLIENTE (no del agente).
+    const WINDOW_MS = 24 * 60 * 60 * 1000;
+    const lastClientMsg = [...(conv.messages || [])].reverse().find((m) => m.from === 'client');
+    const lastIn = lastClientMsg ? new Date(lastClientMsg.at).getTime() : 0;
+    if (!lastIn || Date.now() - lastIn > WINDOW_MS) {
+      return res.status(409).json({
+        message: 'Fuera de la ventana de 24 h: el cliente debe escribirte primero. WhatsApp no permite mensajes libres después de 24 h (se requiere plantilla aprobada).',
+      });
+    }
+
+    // Respuesta del agente por WhatsApp Cloud API (Meta), dentro de la ventana de 24 h.
     await meta.sendText(conv.phone, text);
     conv.messages.push({ from: 'agent', text, at: new Date() });
     conv.humanTakeover = true;

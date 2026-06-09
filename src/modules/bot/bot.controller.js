@@ -7,6 +7,7 @@ const BotConfig = require('./botconfig.model');
 const Intent = require('./intent.model');
 const BotFlow = require('./botflow.model');
 const { runFlow } = require('./flow.runtime');
+const meta = require('../../utils/whatsappMeta');
 const { CLIENT_URL, WHATSAPP_VERIFY_TOKEN } = require('../../config/env');
 const {
   fill, getPostalCode, getScore, findProviders,
@@ -358,16 +359,28 @@ const metaExtract = (req) => {
     const r = m.interactive?.button_reply || m.interactive?.list_reply;
     text = r?.id || r?.title || '';                  // el id mapea a btn:/row: del flujo
   } else if (m.type === 'button') text = m.button?.payload || m.button?.text || '';
-  return { phone, fromMe: false, text: String(text).trim(), name };
+  return { id: m.id, phone, fromMe: false, text: String(text).trim(), name };
 };
 
-// POST /api/whatsapp/webhook → eventos entrantes
+// Dedupe: Meta reintenta el webhook → evita procesar el mismo mensaje 2 veces (anti-spam/baneo).
+const seenIds = new Set();
+const seenOnce = (id) => {
+  if (!id) return false;
+  if (seenIds.has(id)) return true;
+  seenIds.add(id);
+  if (seenIds.size > 1000) seenIds.delete(seenIds.values().next().value);
+  return false;
+};
+
+// POST /api/bot/meta/webhook → eventos entrantes
 const handleMeta = (req, res) => {
   res.sendStatus(200); // responder rápido (Meta reintenta si tarda)
   try {
     if (req.body?.object !== 'whatsapp_business_account') return;
     const msg = metaExtract(req);
     if (!msg || !msg.text) return;
+    if (seenOnce(msg.id)) return;                     // ya procesado → no responder de nuevo
+    meta.markRead(msg.id).catch(() => {});            // marcar leído (calidad)
     enqueue(msg.phone, () => processIncoming(msg, undefined));
   } catch (err) {
     console.error('[Meta] webhook:', err.message);

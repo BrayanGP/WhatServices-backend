@@ -93,6 +93,12 @@ const sendList = async (number, { title = '', description = '', buttonText = 'Ve
 // WhatsApp Cloud API no soporta encuestas nativas → devolvemos false (el motor cae a texto).
 const sendPoll = async () => false;
 
+// Marca un mensaje entrante como leído (mejora la calificación de calidad del número).
+const markRead = (messageId) => {
+  if (!messageId) return null;
+  return post({ status: 'read', message_id: messageId });
+};
+
 // OTP por template de autenticación (business-initiated → evita baneos)
 const sendOtp = (to, code) =>
   post({
@@ -109,6 +115,6 @@ const sendOtp = (to, code) =>
   });
 
 module.exports = {
-  sendText, sendMedia, sendButtons, sendList, sendPoll, sendOtp, waNumber,
+  sendText, sendMedia, sendButtons, sendList, sendPoll, sendOtp, markRead, waNumber,
   DEFAULT_INSTANCE: '',
 };
