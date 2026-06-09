@@ -95,7 +95,7 @@ const sendPoll = async () => false;
 
 // Marca un mensaje entrante como leído (mejora la calificación de calidad del número).
 const markRead = (messageId) => {
-  if (!messageId) return null;
+  if (!messageId) return Promise.resolve(null);
   return post({ status: 'read', message_id: messageId });
 };
 
