@@ -137,6 +137,16 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
     return 'found';
   }
 
+  // Solo la LISTA interactiva de proveedores (sin enviar las 5 fotos). Al elegir, showWorks muestra al profesional.
+  if (action === 'sendResults') {
+    const providers = await orderedProviders(conv);
+    if (!providers.length) return 'empty';
+    const mode = ctx.vars.searchMode || params.mode || 'score';
+    await sendResultsNav(conv, phone, providers, ctx.service, ctx.cp, cfg);
+    await completeRequest(conv, providers, mode);
+    return 'found';
+  }
+
   if (action === 'showWorks') {
     const ids = (conv.suggestedProviders || []).map(String);
     const sel = parseSelection(ctx.message, ctx.lower, ids);

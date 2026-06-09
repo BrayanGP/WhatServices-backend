@@ -195,9 +195,15 @@ const sendServicesList = async (conv, phone, cfg) => {
   }
 };
 
-// Muestra los trabajos de un proveedor + navegacion (volver / otro)
+// Muestra al profesional (tarjeta: logo + datos + contacto) + sus trabajos + navegacion.
 const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const contact = buildContact(conv, provider);
+  // Tarjeta del profesional (logo de perfil + nombre + calificación + ciudad + contacto)
+  const head = `*${provider.businessName}*\n⭐ ${provider.rating?.average || 0}/5 (${provider.rating?.count || 0})${provider.city ? ` · ${provider.city}` : ''}\n💬 Contactar: ${contact}`;
+  const logo = photoUrl(provider.profilePhoto);
+  if (logo) { await sendMedia(phone, logo, head, conv.instance); saveMsg(conv, 'bot', `[perfil] ${head}`); }
+  else await reply(conv, phone, head);
+  // Trabajos
   const photos = (provider.photos || []).map(photoUrl).filter(Boolean);
   if (photos.length) {
     await reply(conv, phone, fill(cfg.messages.worksIntro, { business: provider.businessName }));
@@ -206,9 +212,8 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
       await sendMedia(phone, url, '', conv.instance);
       saveMsg(conv, 'bot', '[trabajo]');
     }
-    await reply(conv, phone, `💬 Contactar a *${provider.businessName}*: ${contact}`);
   } else {
-    await reply(conv, phone, fill(cfg.messages.noWorks, { business: provider.businessName, contact }));
+    await reply(conv, phone, `*${provider.businessName}* aún no ha subido fotos de sus trabajos. 📷`);
   }
   // Botones interactivos de Meta (volver a la lista / nueva búsqueda) + fallback de texto.
   let ok = false;
