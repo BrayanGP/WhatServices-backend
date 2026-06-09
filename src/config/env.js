@@ -45,4 +45,6 @@ module.exports = {
   GRAPH_API_VERSION: process.env.GRAPH_API_VERSION || 'v25.0',
   OTP_TEMPLATE_NAME: process.env.OTP_TEMPLATE_NAME || 'otp_verificacion',
   TEMPLATE_LANG: process.env.TEMPLATE_LANG || 'es_MX',
+  // OTP por WhatsApp: desactívalo (OTP_ENABLED=false) hasta que Meta apruebe el template.
+  OTP_ENABLED: process.env.OTP_ENABLED !== 'false',
 };

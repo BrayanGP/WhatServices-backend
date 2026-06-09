@@ -1,4 +1,3 @@
-const axios = require('axios');
 const {
   GRAPH_API_VERSION, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN,
   OTP_TEMPLATE_NAME, TEMPLATE_LANG,
@@ -12,19 +11,23 @@ const waNumber = (phone) => {
   return d.length === 10 ? `52${d}` : d;
 };
 
+// POST a la Graph API con fetch nativo (sin dependencias). Nunca loguea el token.
 const post = async (payload) => {
   if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
     console.error('[meta] Falta WHATSAPP_ACCESS_TOKEN o WHATSAPP_PHONE_NUMBER_ID');
     return null;
   }
   try {
-    const { data } = await axios.post(url(), { messaging_product: 'whatsapp', ...payload }, {
+    const res = await fetch(url(), {
+      method: 'POST',
       headers: { Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-      timeout: 15000,
+      body: JSON.stringify({ messaging_product: 'whatsapp', ...payload }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { console.error('[meta] Error:', JSON.stringify(data)); return null; }
     return data;
   } catch (err) {
-    console.error('[meta] Error:', JSON.stringify(err.response?.data || err.message));
+    console.error('[meta] Error de red:', err.message);
     return null;
   }
 };

@@ -8,7 +8,7 @@ const evolution = require('../../utils/evolution');
 const meta = require('../../utils/whatsappMeta');
 const { modulesForUser } = require('../../utils/permissions');
 const { fileUrl } = require('../../middleware/upload');
-const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env');
+const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV, OTP_ENABLED } = require('../../config/env');
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -241,6 +241,17 @@ const registerSendOtp = async (req, res, next) => {
       }
     }
 
+    // OTP desactivado temporalmente (hasta aprobar el template en Meta):
+    // marcamos el teléfono como verificado para no bloquear el registro.
+    if (!OTP_ENABLED) {
+      await Otp.findOneAndUpdate(
+        { phone: d10, purpose: 'register' },
+        { phone: d10, purpose: 'register', verified: true, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 30 * 60 * 1000), attempts: 0, blockedUntil: null, codeHash: '' },
+        { upsert: true, new: true },
+      );
+      return res.json({ ok: true, otpDisabled: true });
+    }
+
     const now = Date.now();
     let otp = await Otp.findOne({ phone: d10, purpose: 'register' });
     if (otp?.blockedUntil && otp.blockedUntil.getTime() > now) {
@@ -265,6 +276,7 @@ const registerSendOtp = async (req, res, next) => {
 const registerVerifyOtp = async (req, res, next) => {
   try {
     const { phone, code } = req.body || {};
+    if (!OTP_ENABLED) return res.json({ ok: true, verified: true, otpDisabled: true });
     const d10 = last10(phone);
     const now = Date.now();
     const otp = await Otp.findOne({ phone: d10, purpose: 'register' });
