@@ -19,13 +19,20 @@ const post = async (payload) => {
     console.error('[meta] Falta WHATSAPP_ACCESS_TOKEN o WHATSAPP_PHONE_NUMBER_ID');
     return null;
   }
+  const endpoint = url();
+  // --- DIAGNÓSTICO (no cambia la lógica) ---
+  console.log('[meta][diag] POST', endpoint);
+  console.log('[meta][diag] phoneNumberId:', WHATSAPP_PHONE_NUMBER_ID, '| graphVersion:', GRAPH_API_VERSION);
+  console.log('[meta][diag] token(10):', String(WHATSAPP_ACCESS_TOKEN).slice(0, 10) + '…', '| len:', String(WHATSAPP_ACCESS_TOKEN).length);
+  console.log('[meta][diag] payload:', JSON.stringify({ messaging_product: 'whatsapp', ...payload }));
   try {
-    const res = await fetch(url(), {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messaging_product: 'whatsapp', ...payload }),
     });
     const data = await res.json().catch(() => ({}));
+    console.log('[meta][diag] status:', res.status, '| body:', JSON.stringify(data));
     if (!res.ok) { console.error('[meta] Error:', JSON.stringify(data)); return null; }
     return data;
   } catch (err) {
