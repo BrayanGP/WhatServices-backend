@@ -5,9 +5,10 @@ const Provider = require('../providers/provider.model');
 const Otp = require('./otp.model');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
+const meta = require('../../utils/whatsappMeta');
 const { modulesForUser } = require('../../utils/permissions');
 const { fileUrl } = require('../../middleware/upload');
-const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV } = require('../../config/env');
+const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV, OTP_ENABLED } = require('../../config/env');
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -174,13 +175,8 @@ const forgotPassword = async (req, res, next) => {
       user.resetCodeAttempts = 0;
       await user.save();
       try {
-        const s = await Setting.findOne({ key: 'activeInstance' }).lean();
-        const instance = s?.value || evolution.DEFAULT_INSTANCE;
-        await evolution.sendText(
-          waNumber(req.body.phone),
-          `🔐 Tu código para restablecer tu contraseña en *WhatServices* es: *${code}*\n\nVence en 5 minutos. Si no fuiste tú, ignora este mensaje.`,
-          instance,
-        );
+        // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
+        await meta.sendOtp(req.body.phone, code);
       } catch (e) { console.error('[forgotPassword] no se pudo enviar código:', e.message); }
     }
     res.json({ ok: true });
@@ -245,6 +241,17 @@ const registerSendOtp = async (req, res, next) => {
       }
     }
 
+    // OTP desactivado temporalmente (hasta aprobar el template en Meta):
+    // marcamos el teléfono como verificado para no bloquear el registro.
+    if (!OTP_ENABLED) {
+      await Otp.findOneAndUpdate(
+        { phone: d10, purpose: 'register' },
+        { phone: d10, purpose: 'register', verified: true, verifiedAt: new Date(), expiresAt: new Date(Date.now() + 30 * 60 * 1000), attempts: 0, blockedUntil: null, codeHash: '' },
+        { upsert: true, new: true },
+      );
+      return res.json({ ok: true, otpDisabled: true });
+    }
+
     const now = Date.now();
     let otp = await Otp.findOne({ phone: d10, purpose: 'register' });
     if (otp?.blockedUntil && otp.blockedUntil.getTime() > now) {
@@ -257,9 +264,8 @@ const registerSendOtp = async (req, res, next) => {
     if (!otp || (otp.blockedUntil && otp.blockedUntil.getTime() <= now)) { set.attempts = 0; set.blockedUntil = null; }
     otp = await Otp.findOneAndUpdate({ phone: d10, purpose: 'register' }, set, { upsert: true, new: true });
     try {
-      await evolution.sendText(waNumber(req.body.phone),
-        `🔐 Tu código de verificación para registrarte en *WhatServices* es: *${code}*\n\nVence en 5 minutos.`,
-        await sendOtpInstance());
+      // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
+      await meta.sendOtp(req.body.phone, code);
     } catch (e) { console.error('[otp] no se pudo enviar:', e.message); }
     res.json({ ok: true, expiresInMs: OTP_TTL_MS });
   } catch (err) {
@@ -270,6 +276,7 @@ const registerSendOtp = async (req, res, next) => {
 const registerVerifyOtp = async (req, res, next) => {
   try {
     const { phone, code } = req.body || {};
+    if (!OTP_ENABLED) return res.json({ ok: true, verified: true, otpDisabled: true });
     const d10 = last10(phone);
     const now = Date.now();
     const otp = await Otp.findOne({ phone: d10, purpose: 'register' });

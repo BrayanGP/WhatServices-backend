@@ -55,7 +55,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ---- API key: protege /api cuando API_KEY está definido ----
 // Exentos: preflight CORS y webhooks server-to-server (no pueden enviar el header).
-const API_KEY_EXEMPT = ['/api/bot/webhook', '/api/subscriptions/webhook'];
+const API_KEY_EXEMPT = ['/api/bot/webhook', '/api/bot/meta/webhook', '/api/subscriptions/webhook'];
 app.use((req, res, next) => {
   if (!API_KEY) return next();                       // desactivado si no hay key
   if (req.method === 'OPTIONS') return next();        // preflight
