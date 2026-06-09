@@ -17,6 +17,7 @@ const {
   createUser, updateUserRole, resetUserPassword,
   getModules, getRoles, createRole, updateRole, deleteRole,
 } = require('./admin.controller');
+const { overview: analyticsOverview, funnel: analyticsFunnel } = require('../analytics/analytics.controller');
 const { verifyToken, requireRole } = require('../../middleware/auth');
 
 // Acceso al panel: admin (total) o staff (según su rol). El gating fino es por módulos en el front.
@@ -70,6 +71,10 @@ router.patch('/requests/:id', updateRequest);
 
 // Dashboard
 router.get('/stats', getStats);
+
+// Analítica del sitio (visitas + embudos)
+router.get('/analytics/overview', analyticsOverview);
+router.get('/analytics/funnel', analyticsFunnel);
 
 // Configuracion del bot
 router.get('/bot-config', getBotConfig);

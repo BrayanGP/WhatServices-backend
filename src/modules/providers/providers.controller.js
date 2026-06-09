@@ -1,9 +1,11 @@
 const bcrypt = require('bcryptjs');
+const QRCode = require('qrcode');
 const Provider = require('./provider.model');
 const User = require('../users/user.model');
 const Otp = require('../auth/otp.model');
 const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
 const { fileUrl } = require('../../middleware/upload');
+const { CLIENT_URL } = require('../../config/env');
 
 const OTP_VERIFIED_TTL_MS = 30 * 60 * 1000; // el OTP verificado vale 30 min para completar el registro
 
@@ -238,4 +240,27 @@ const uploadProfilePhoto = async (req, res, next) => {
   }
 };
 
-module.exports = { register, getMine, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto };
+// GET /providers/:id/profile-qr  — PNG del QR que apunta al perfil público del proveedor
+const profileQr = async (req, res, next) => {
+  try {
+    const provider = await Provider.findById(req.params.id).select('businessName').lean();
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+
+    const profileUrl = `${CLIENT_URL}/providers/${req.params.id}`;
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="qr-${provider.businessName?.replace(/\s+/g, '-').toLowerCase() || req.params.id}.png"`
+    );
+    await QRCode.toFileStream(res, profileUrl, {
+      width: 600,
+      margin: 2,
+      color: { dark: '#1a3a2a', light: '#ffffff' }, // verde oscuro de la marca
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, getMine, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto, profileQr };
