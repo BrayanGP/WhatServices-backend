@@ -4,9 +4,9 @@ const Request = require('../requests/request.model');
 const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 
-// Retraso entre mensajes. Con WhatsApp Cloud API (Meta) NO se necesita (era anti-baneo de Baileys).
-// Por defecto 0 (sin delay). Se puede reactivar con BOT_REPLY_DELAY_MS si algún día hiciera falta.
-const REPLY_DELAY_MS = Math.max(0, parseInt(process.env.BOT_REPLY_DELAY_MS, 10) || 0);
+// Sin retraso entre mensajes: con WhatsApp Cloud API (Meta) no se necesita (era anti-baneo de Baileys).
+// Fijo en 0 (ignora BOT_REPLY_DELAY_MS) para responder al instante.
+const REPLY_DELAY_MS = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Rellena placeholders {key} en las plantillas de mensajes
