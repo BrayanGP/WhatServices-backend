@@ -1,6 +1,7 @@
 const Provider = require('../providers/provider.model');
 const Request = require('../requests/request.model');
-const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/evolution');
+// Transporte de WhatsApp: ahora WhatsApp Cloud API (Meta) en vez de Evolution.
+const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 
 // Retraso humano entre mensajes para evitar baneos (configurable)

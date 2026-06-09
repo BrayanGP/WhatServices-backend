@@ -11,7 +11,9 @@ const waNumber = (phone) => {
   return d.length === 10 ? `52${d}` : d;
 };
 
-// POST a la Graph API con fetch nativo (sin dependencias). Nunca loguea el token.
+const clip = (s, n) => String(s == null ? '' : s).slice(0, n);
+
+// POST a la Graph API con fetch nativo. Nunca loguea el token. Devuelve la data o null.
 const post = async (payload) => {
   if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
     console.error('[meta] Falta WHATSAPP_ACCESS_TOKEN o WHATSAPP_PHONE_NUMBER_ID');
@@ -32,9 +34,64 @@ const post = async (payload) => {
   }
 };
 
-// Texto libre (solo válido dentro de la ventana de 24 h del usuario)
-const sendText = (to, body) =>
-  post({ to: waNumber(to), type: 'text', text: { preview_url: true, body: String(body).slice(0, 4096) } });
+// ---- Mensajes (misma firma que utils/evolution para reusar el motor del bot) ----
+
+const sendText = async (number, text /* , instance */) =>
+  post({ to: waNumber(number), type: 'text', text: { preview_url: true, body: clip(text, 4096) } });
+
+const sendMedia = async (number, mediaUrl, caption = '' /* , instance */) =>
+  post({ to: waNumber(number), type: 'image', image: { link: mediaUrl, caption: clip(caption, 1024) } });
+
+// Botones de respuesta rápida (máx 3). buttons: [{ type:'reply', displayText, id }]
+const sendButtons = async (number, { title = '', description = '', footer = '', buttons = [] } /* , instance */) => {
+  const body = clip(description || title || ' ', 1024);
+  const res = await post({
+    to: waNumber(number),
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      ...(footer ? { footer: { text: clip(footer, 60) } } : {}),
+      action: {
+        buttons: (buttons || []).slice(0, 3).map((b) => ({
+          type: 'reply',
+          reply: { id: clip(b.id, 256), title: clip(b.displayText || b.label || b.id, 20) },
+        })),
+      },
+    },
+  });
+  return !!res;
+};
+
+// Lista interactiva. sections: [{ title, rows:[{ title, description, rowId }] }]  (máx 10 filas)
+const sendList = async (number, { title = '', description = '', buttonText = 'Ver', footerText = '', sections = [] } /* , instance */) => {
+  const body = clip(description || title || ' ', 1024);
+  let remaining = 10;
+  const secs = (sections || []).map((s) => {
+    const rows = (s.rows || []).slice(0, Math.max(0, remaining)).map((r) => ({
+      id: clip(r.rowId || r.id, 200),
+      title: clip(r.title || r.label, 24),
+      ...(r.description ? { description: clip(r.description, 72) } : {}),
+    }));
+    remaining -= rows.length;
+    return { title: clip(s.title || ' ', 24), rows };
+  }).filter((s) => s.rows.length);
+  if (!secs.length) return false;
+  const res = await post({
+    to: waNumber(number),
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: body },
+      ...(footerText ? { footer: { text: clip(footerText, 60) } } : {}),
+      action: { button: clip(buttonText, 20), sections: secs },
+    },
+  });
+  return !!res;
+};
+
+// WhatsApp Cloud API no soporta encuestas nativas → devolvemos false (el motor cae a texto).
+const sendPoll = async () => false;
 
 // OTP por template de autenticación (business-initiated → evita baneos)
 const sendOtp = (to, code) =>
@@ -51,4 +108,7 @@ const sendOtp = (to, code) =>
     },
   });
 
-module.exports = { sendText, sendOtp, waNumber };
+module.exports = {
+  sendText, sendMedia, sendButtons, sendList, sendPoll, sendOtp, waNumber,
+  DEFAULT_INSTANCE: '',
+};

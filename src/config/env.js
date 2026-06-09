@@ -42,6 +42,7 @@ module.exports = {
   // ---- WhatsApp Cloud API (Meta) ----
   WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || '',
   WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+  WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN || '',
   GRAPH_API_VERSION: process.env.GRAPH_API_VERSION || 'v25.0',
   OTP_TEMPLATE_NAME: process.env.OTP_TEMPLATE_NAME || 'otp_verificacion',
   TEMPLATE_LANG: process.env.TEMPLATE_LANG || 'es_MX',

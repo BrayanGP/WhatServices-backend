@@ -7,7 +7,7 @@ const BotConfig = require('./botconfig.model');
 const Intent = require('./intent.model');
 const BotFlow = require('./botflow.model');
 const { runFlow } = require('./flow.runtime');
-const { CLIENT_URL } = require('../../config/env');
+const { CLIENT_URL, WHATSAPP_VERIFY_TOKEN } = require('../../config/env');
 const {
   fill, getPostalCode, getScore, findProviders,
   startRequest, completeRequest, reply, sendCatalog, sendProviderWorks,
@@ -334,4 +334,44 @@ const processIncoming = async (msg, instance) => {
   }
 };
 
-module.exports = { verifyWebhook, handleIncoming };
+// ===================== WhatsApp Cloud API (Meta) =====================
+
+// GET /api/whatsapp/webhook → verificación de Meta
+const verifyMeta = (req, res) => {
+  if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === WHATSAPP_VERIFY_TOKEN) {
+    return res.status(200).send(req.query['hub.challenge']);
+  }
+  return res.sendStatus(403);
+};
+
+// Extrae el mensaje entrante del payload de Meta (texto, botón o fila de lista).
+const metaExtract = (req) => {
+  const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+  if (!value || value.statuses) return null;        // ignora entregado/leído
+  const m = value.messages?.[0];
+  if (!m) return null;
+  const phone = m.from;
+  const name = value.contacts?.[0]?.profile?.name || '';
+  let text = '';
+  if (m.type === 'text') text = m.text?.body || '';
+  else if (m.type === 'interactive') {
+    const r = m.interactive?.button_reply || m.interactive?.list_reply;
+    text = r?.id || r?.title || '';                  // el id mapea a btn:/row: del flujo
+  } else if (m.type === 'button') text = m.button?.payload || m.button?.text || '';
+  return { phone, fromMe: false, text: String(text).trim(), name };
+};
+
+// POST /api/whatsapp/webhook → eventos entrantes
+const handleMeta = (req, res) => {
+  res.sendStatus(200); // responder rápido (Meta reintenta si tarda)
+  try {
+    if (req.body?.object !== 'whatsapp_business_account') return;
+    const msg = metaExtract(req);
+    if (!msg || !msg.text) return;
+    enqueue(msg.phone, () => processIncoming(msg, undefined));
+  } catch (err) {
+    console.error('[Meta] webhook:', err.message);
+  }
+};
+
+module.exports = { verifyWebhook, handleIncoming, verifyMeta, handleMeta };
