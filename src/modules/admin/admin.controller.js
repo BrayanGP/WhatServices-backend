@@ -13,6 +13,7 @@ const Setting = require('./setting.model');
 const { MODULES } = require('../../config/modules');
 const evolution = require('../../utils/evolution');
 const { sendText } = evolution;
+const meta = require('../../utils/whatsappMeta');
 
 const getProviders = async (req, res, next) => {
   try {
@@ -371,7 +372,9 @@ const replyConversation = async (req, res, next) => {
     const conv = await Conversation.findById(req.params.id);
     if (!conv) return res.status(404).json({ message: 'Conversation not found' });
 
-    await sendText(conv.phone, text, conv.instance);
+    // Respuesta del agente por WhatsApp Cloud API (Meta). Texto libre válido
+    // dentro de la ventana de 24 h del cliente (toma de control humano).
+    await meta.sendText(conv.phone, text);
     conv.messages.push({ from: 'agent', text, at: new Date() });
     conv.humanTakeover = true;
     conv.step = 'HUMAN';
