@@ -4,8 +4,9 @@ const Request = require('../requests/request.model');
 const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 
-// Retraso humano entre mensajes para evitar baneos (configurable)
-const REPLY_DELAY_MS = parseInt(process.env.BOT_REPLY_DELAY_MS) || 2500;
+// Retraso entre mensajes. Con WhatsApp Cloud API (Meta) NO se necesita (era anti-baneo de Baileys).
+// Por defecto 0 (sin delay). Se puede reactivar con BOT_REPLY_DELAY_MS si algún día hiciera falta.
+const REPLY_DELAY_MS = Math.max(0, parseInt(process.env.BOT_REPLY_DELAY_MS, 10) || 0);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Rellena placeholders {key} en las plantillas de mensajes
@@ -141,12 +142,25 @@ const sendCatalog = async (conv, phone, providers, service, cp, cfg) => {
   await sendResultsNav(conv, phone, providers, service, cp, cfg);
 };
 
-// Menu de navegacion tras mostrar resultados: lista interactiva (best-effort) + texto SIEMPRE
+// Menu de navegacion tras mostrar resultados: LISTA interactiva de Meta (elegir sin escribir número) + fallback de texto.
 const sendResultsNav = async (conv, phone, providers, service, cp, cfg) => {
   const link = `${CLIENT_URL}/providers?category=${encodeURIComponent(service)}${cp ? `&cp=${cp}` : ''}`;
-  // Solo texto: WhatsApp (Meta/Baileys) no renderiza listas/botones de forma fiable
-  // (dejaban un mensaje "No se pudo cargar"). Responder por número funciona igual.
-  await reply(conv, phone, fill(cfg.messages.resultsHint, { count: providers.length, link }));
+  const rows = providers.map((p, i) => ({
+    title: `${i + 1}. ${p.businessName}`.slice(0, 24),
+    description: `⭐ ${p.rating?.average || 0}/5${p.city ? ` · ${p.city}` : ''}`.slice(0, 72),
+    rowId: `works:${p._id}`,
+  }));
+  rows.push({ title: '🔄 Otra búsqueda', description: 'Buscar otro servicio', rowId: 'menu' });
+  let ok = false;
+  try {
+    ok = await sendList(phone, {
+      title: '', description: `👇 Elige un profesional de *${service}* para ver sus *trabajos* 📸 y contacto:`,
+      buttonText: 'Ver profesionales', footerText: 'WhatServices',
+      sections: [{ title: service.slice(0, 24) || 'Profesionales', rows }],
+    }, conv.instance);
+  } catch (e) { /* fallback de texto abajo */ }
+  saveMsg(conv, 'bot', `[lista] ${providers.length} profesionales de ${service}`);
+  if (!ok) await reply(conv, phone, fill(cfg.messages.resultsHint, { count: providers.length, link }));
 };
 
 // Muestra los trabajos de un proveedor + navegacion (volver / otro)
@@ -164,8 +178,18 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
   } else {
     await reply(conv, phone, fill(cfg.messages.noWorks, { business: provider.businessName, contact }));
   }
-  // Solo texto: los botones no renderizan en WhatsApp (dejaban "No se pudo cargar").
-  await reply(conv, phone, fill(cfg.messages.worksNav));
+  // Botones interactivos de Meta (volver a la lista / nueva búsqueda) + fallback de texto.
+  let ok = false;
+  try {
+    ok = await sendButtons(phone, {
+      description: '¿Qué deseas hacer?', footer: 'WhatServices',
+      buttons: [
+        { type: 'reply', displayText: '🔙 Volver a la lista', id: 'back' },
+        { type: 'reply', displayText: '🔄 Otra búsqueda', id: 'menu' },
+      ],
+    }, conv.instance);
+  } catch (e) { /* fallback de texto abajo */ }
+  if (!ok) await reply(conv, phone, fill(cfg.messages.worksNav));
 };
 
 // Interpreta la respuesta del cliente en la pantalla de resultados
