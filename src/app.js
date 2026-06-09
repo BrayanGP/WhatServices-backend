@@ -73,6 +73,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bot', botRoutes);
+app.use('/api/events', require('./modules/analytics/analytics.routes'));
 app.use('/wa', waRoutes);
 app.use('/files', fileRoutes);
 // Documentos legales: públicos en /legal (descargas sin API key) y alias bajo /api para el front.
