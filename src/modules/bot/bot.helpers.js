@@ -1,5 +1,6 @@
 const Provider = require('../providers/provider.model');
 const Request = require('../requests/request.model');
+const Category = require('../admin/category.model');
 // Transporte de WhatsApp: ahora WhatsApp Cloud API (Meta) en vez de Evolution.
 const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
@@ -163,6 +164,37 @@ const sendResultsNav = async (conv, phone, providers, service, cp, cfg) => {
   if (!ok) await reply(conv, phone, fill(cfg.messages.resultsHint, { count: providers.length, link }));
 };
 
+// Envía las categorías disponibles (con proveedores) como LISTA interactiva de Meta.
+// Al tocar una fila, el id = nombre de la categoría → matchService la reconoce.
+const sendServicesList = async (conv, phone, cfg) => {
+  const withProviders = await Provider.distinct('categories', { isBlocked: false });
+  const set = new Set((withProviders || []).map((c) => String(c)));
+  let cats = await Category.find({ status: 'active', isActive: true }).sort({ name: 1 }).lean();
+  cats = cats.filter((c) => set.has(c.name));
+  if (!cats.length) {
+    await reply(conv, phone, 'Por ahora no hay servicios disponibles. Escríbeme *hola* más tarde. 🙏');
+    return;
+  }
+  const rows = cats.slice(0, 10).map((c) => ({
+    title: `${c.icon || '•'} ${c.name}`.trim().slice(0, 24),
+    description: '',
+    rowId: c.name,
+  }));
+  let ok = false;
+  try {
+    ok = await sendList(phone, {
+      title: '', description: '¿Qué servicio necesitas? 🔍 Elige una categoría:',
+      buttonText: 'Ver servicios', footerText: 'WhatServices',
+      sections: [{ title: 'Servicios', rows }],
+    }, conv.instance);
+  } catch (e) { /* fallback de texto abajo */ }
+  saveMsg(conv, 'bot', '[lista servicios]');
+  if (!ok) {
+    const list = cats.map((c) => `• ${c.icon || ''} ${c.name}`.trim()).join('\n');
+    await reply(conv, phone, `¿Qué servicio necesitas? 🔍\n\n${list}`);
+  }
+};
+
 // Muestra los trabajos de un proveedor + navegacion (volver / otro)
 const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const contact = buildContact(conv, provider);
@@ -268,7 +300,7 @@ const sendCarousel = async (conv, phone, cards = [], cfg) => {
 module.exports = {
   REPLY_DELAY_MS, sleep, fill, getPostalCode, getScore, findProviders, saveMsg,
   waNumber, buildContact, photoUrl, startRequest, completeRequest, reply,
-  sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
+  sendCatalog, sendResultsNav, sendProviderWorks, parseSelection, sendServicesList,
   sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
   getTopProviders, formatProviderList,
 };
