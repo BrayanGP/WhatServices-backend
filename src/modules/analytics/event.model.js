@@ -10,10 +10,10 @@ const eventSchema = new mongoose.Schema({
   referrer: { type: String, default: '' },
   ua: { type: String, default: '' },                   // user-agent (para móvil/desktop)
   meta: { type: Object, default: {} },                 // datos extra (categoría buscada, providerId, etc.)
-  createdAt: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
-// Purga automática a los 180 días para no crecer sin límite.
+// Índice + purga automática a los 180 días (TTL) para no crecer sin límite.
 eventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 180 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('Event', eventSchema);
