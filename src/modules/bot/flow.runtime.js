@@ -5,7 +5,7 @@ const Intent = require('./intent.model');
 const { CLIENT_URL } = require('../../config/env');
 const {
   fill, getPostalCode, getScore, findProviders, startRequest, completeRequest,
-  reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection,
+  reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection, sendServicesList,
   sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
   getTopProviders, formatProviderList, photoUrl,
 } = require('./bot.helpers');
@@ -106,6 +106,11 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
       return 'matched';
     }
     return 'notMatched';
+  }
+
+  if (action === 'sendServices') {
+    await sendServicesList(conv, phone, cfg);
+    return null;
   }
 
   if (action === 'startRequest') {
