@@ -13,11 +13,13 @@ const OTP_VERIFIED_TTL_MS = 30 * 60 * 1000; // el OTP verificado vale 30 min par
 const register = async (req, res, next) => {
   try {
     const {
-      name, email, phone, password,
+      name, phone, password,
       businessName, ownerName, city, postalCode, address, description,
       categories = [], specialties = [], lat, lng,
       acceptedTerms, termsVersion, acceptedPrivacy, privacyVersion,
     } = req.body;
+    // Si el email viene vacío, tratarlo como ausente para no chocar con el índice único sparse
+    const email = req.body.email?.trim() || undefined;
 
     if (!password || password.length < 6) {
       return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
