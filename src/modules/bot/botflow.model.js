@@ -10,6 +10,7 @@ const graphSchema = new mongoose.Schema({
 
 const botFlowSchema = new mongoose.Schema({
   key: { type: String, unique: true, default: 'default' },
+  name: { type: String, default: 'Flujo principal' },                           // nombre de la plantilla/flujo en edición
   draft: { type: graphSchema, default: () => ({ nodes: [], edges: [] }) },      // lo que se edita
   published: { type: graphSchema, default: () => ({ nodes: [], edges: [] }) },  // lo que ejecuta el bot
   isPublished: { type: Boolean, default: false },

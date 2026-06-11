@@ -794,7 +794,7 @@ const ensureDefaultIntents = async (req, res, next) => {
 const getFlow = async (req, res, next) => {
   try {
     const doc = await BotFlow.getSingleton();
-    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+    res.json({ name: doc.name, draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
   } catch (err) {
     next(err);
   }
@@ -802,11 +802,12 @@ const getFlow = async (req, res, next) => {
 
 const saveFlow = async (req, res, next) => {
   try {
-    const { nodes = [], edges = [] } = req.body || {};
+    const { nodes = [], edges = [], name } = req.body || {};
     const doc = await BotFlow.getSingleton();
     doc.draft = { nodes, edges };
+    if (typeof name === 'string' && name.trim()) doc.name = name.trim();
     await doc.save();
-    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+    res.json({ name: doc.name, draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
   } catch (err) {
     next(err);
   }
@@ -814,10 +815,11 @@ const saveFlow = async (req, res, next) => {
 
 const publishFlow = async (req, res, next) => {
   try {
-    const { nodes, edges } = req.body || {};
+    const { nodes, edges, name } = req.body || {};
     const doc = await BotFlow.getSingleton();
     // Si mandan grafo en el body, se guarda como borrador antes de publicar
     if (Array.isArray(nodes) && Array.isArray(edges)) doc.draft = { nodes, edges };
+    if (typeof name === 'string' && name.trim()) doc.name = name.trim();
     if (!(doc.draft.nodes || []).some((n) => n.type === 'start')) {
       return res.status(400).json({ message: 'El flujo necesita un nodo de inicio (start) para publicarse.' });
     }
@@ -825,7 +827,7 @@ const publishFlow = async (req, res, next) => {
     doc.isPublished = true;
     doc.version = (doc.version || 0) + 1;
     await doc.save();
-    res.json({ draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
+    res.json({ name: doc.name, draft: doc.draft, isPublished: doc.isPublished, version: doc.version });
   } catch (err) {
     next(err);
   }

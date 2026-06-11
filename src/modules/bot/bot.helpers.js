@@ -1,6 +1,26 @@
 const Provider = require('../providers/provider.model');
 const Request = require('../requests/request.model');
 const Category = require('../admin/category.model');
+const { geocodeCp } = require('../../utils/geocode');
+
+// Radio de búsqueda por cercanía (metros)
+const NEAR_RADIUS_M = 20000; // 20 km
+
+// Busca proveedores dentro de un radio (geocodifica el CP → coordenadas → $near).
+// Devuelve null si no se pudo geocodificar (para caer al método por CP exacto).
+const findNearByRadius = async (base, postalCode, limit) => {
+  const coords = await geocodeCp(postalCode);
+  if (!coords) return null;
+  return Provider.find({
+    ...base,
+    location: {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [coords.lng, coords.lat] },
+        $maxDistance: NEAR_RADIUS_M,
+      },
+    },
+  }).limit(limit).lean();
+};
 // Transporte de WhatsApp: ahora WhatsApp Cloud API (Meta) en vez de Evolution.
 const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
 const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
@@ -28,6 +48,10 @@ const getScore = (text) => {
 const findProviders = async (service, { mode, postalCode } = {}) => {
   const base = { categories: service, availability: 'available', isBlocked: false };
   if (mode === 'near' && postalCode) {
+    // 1) Radio real de 20km (geocodificando el CP del cliente)
+    const near = await findNearByRadius(base, postalCode, 5);
+    if (near && near.length) return near;
+    // 2) Fallback: mismo CP exacto + completar con mejor calificados
     let providers = await Provider.find({ ...base, postalCode })
       .sort({ 'rating.average': -1 }).limit(5).lean();
     if (providers.length < 5) {
@@ -50,6 +74,8 @@ const getTopProviders = async ({ service, mode = 'score', postalCode, limit = 5 
   const base = { availability: 'available', isBlocked: false };
   if (service) base.categories = service;
   if (mode === 'near' && postalCode) {
+    const near = await findNearByRadius(base, postalCode, limit);
+    if (near && near.length) return near;
     let providers = await Provider.find({ ...base, postalCode }).sort({ 'rating.average': -1 }).limit(limit).lean();
     if (providers.length < limit) {
       const ids = providers.map((p) => p._id);
