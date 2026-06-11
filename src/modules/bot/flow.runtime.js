@@ -302,7 +302,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
       servicesAvailable: servicesAvailableList, servicesAvailableCount: availableCats.length,
       topRated: topRatedList, topRatedCount, nearby: nearbyList, nearbyCount,
       web: webBase, webProviders: `${webBase}/providers`, webRegister: `${webBase}/unete`,
-      webService: _profileUrl, webProfile: _profileUrl,
+      webService: _profileUrl, webProfile: _profileUrl, webSearch: _searchUrl,
       date: dateStr, time: timeStr, open: cfg.hours.openHour, close: cfg.hours.closeHour, intent: ctx.intent,
       ...ctx.vars,
     };
