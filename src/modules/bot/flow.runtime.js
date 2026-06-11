@@ -272,7 +272,8 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
   const firstName = String(ctx.name || '').trim().split(/\s+/)[0] || '';
   const dateStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, dateStyle: 'long' }).format(now);
   const timeStr = new Intl.DateTimeFormat('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now);
-  const webBase = (CLIENT_URL || '').replace(/\/$/, '');
+  // CLIENT_URL puede traer varias URLs separadas por coma (CORS); para los links usamos solo la primera.
+  const webBase = String(CLIENT_URL || '').split(',')[0].trim().replace(/\/$/, '');
 
   // Variables propias definidas por el usuario (base, sobre-escribibles por las del sistema/capturadas)
   const customVars = {};
