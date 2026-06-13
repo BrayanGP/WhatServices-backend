@@ -210,18 +210,123 @@ const updateAvailability = async (req, res, next) => {
   }
 };
 
+const { WHATSAPP_ALBUM, DEFAULT_ALBUM, WHATSAPP_MAX, RESERVED_ALBUMS } = Provider;
+const MAX_PHOTOS_TOTAL = 60; // tope sano de fotos por proveedor (la galeria 'default' admite muchas)
+
+// Cuantas fotos hay actualmente en un album
+const countInAlbum = (provider, album) =>
+  (provider.photos || []).filter((p) => (p.albums || []).includes(album)).length;
+
 const uploadPhotos = async (req, res, next) => {
   try {
     const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
     if (!provider) return res.status(404).json({ message: 'Provider not found' });
-    if (provider.photos.length >= 5) {
-      return res.status(400).json({ message: 'Maximum 5 photos allowed' });
+
+    // Album destino (campo del formulario o query). Por defecto 'default'.
+    const album = String(req.body.album || req.query.album || DEFAULT_ALBUM).trim() || DEFAULT_ALBUM;
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ message: 'No files' });
+
+    // Tope total
+    if (provider.photos.length + files.length > MAX_PHOTOS_TOTAL) {
+      return res.status(400).json({ message: `Máximo ${MAX_PHOTOS_TOTAL} fotos en total` });
     }
-    const newPhotos = req.files.map((f) => fileUrl(f));
-    const allowed = 5 - provider.photos.length;
-    provider.photos.push(...newPhotos.slice(0, allowed));
+    // El album WhatsApp solo admite 5 (es lo que muestra el bot)
+    if (album === WHATSAPP_ALBUM) {
+      const room = WHATSAPP_MAX - countInAlbum(provider, WHATSAPP_ALBUM);
+      if (files.length > room) {
+        return res.status(400).json({ message: `El álbum de WhatsApp admite máximo ${WHATSAPP_MAX} fotos${room > 0 ? ` (te quedan ${room})` : ''}.` });
+      }
+    }
+    // Toda foto pertenece a 'default'; ademas al album destino si es distinto.
+    const albums = album && album !== DEFAULT_ALBUM ? [DEFAULT_ALBUM, album] : [DEFAULT_ALBUM];
+    const newPhotos = files.map((f) => ({ ...fileUrl(f), albums: [...albums] }));
+    provider.photos.push(...newPhotos);
+
+    // Si es un album propio nuevo, registrarlo en la lista del proveedor
+    if (album && !RESERVED_ALBUMS.includes(album) && !provider.albums.includes(album)) {
+      provider.albums.push(album);
+    }
     await provider.save();
-    res.json({ photos: provider.photos });
+    res.json({ photos: provider.photos, albums: provider.albums });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Eliminar una foto por publicId (de TODOS los albumes a los que pertenece)
+const deletePhoto = async (req, res, next) => {
+  try {
+    const publicId = req.body.publicId || req.query.publicId;
+    if (!publicId) return res.status(400).json({ message: 'publicId requerido' });
+    const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    provider.photos = (provider.photos || []).filter((p) => p.publicId !== publicId);
+    await provider.save();
+    res.json({ photos: provider.photos, albums: provider.albums });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Cambiar a que albumes pertenece una foto (p. ej. agregar/quitar de WhatsApp)
+const updatePhotoAlbums = async (req, res, next) => {
+  try {
+    const { publicId, albums } = req.body || {};
+    if (!publicId || !Array.isArray(albums)) return res.status(400).json({ message: 'publicId y albums requeridos' });
+    const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    const photo = (provider.photos || []).find((p) => p.publicId === publicId);
+    if (!photo) return res.status(404).json({ message: 'Foto no encontrada' });
+
+    // Normaliza: siempre en 'default'; sin duplicados
+    let next_ = Array.from(new Set([DEFAULT_ALBUM, ...albums.map((a) => String(a).trim()).filter(Boolean)]));
+    // Tope del album WhatsApp
+    if (next_.includes(WHATSAPP_ALBUM) && !(photo.albums || []).includes(WHATSAPP_ALBUM)) {
+      if (countInAlbum(provider, WHATSAPP_ALBUM) >= WHATSAPP_MAX) {
+        return res.status(400).json({ message: `El álbum de WhatsApp ya tiene ${WHATSAPP_MAX} fotos. Quita una primero.` });
+      }
+    }
+    photo.albums = next_;
+    provider.markModified('photos');
+    await provider.save();
+    res.json({ photos: provider.photos, albums: provider.albums });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Crear un album propio (vacio)
+const createAlbum = async (req, res, next) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'Nombre requerido' });
+    if (RESERVED_ALBUMS.map((a) => a.toLowerCase()).includes(name.toLowerCase())) {
+      return res.status(400).json({ message: 'Ese nombre está reservado' });
+    }
+    const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    if (!provider.albums.includes(name)) provider.albums.push(name);
+    await provider.save();
+    res.json({ albums: provider.albums });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Eliminar un album propio (no los predefinidos). Las fotos quedan en 'default'.
+const deleteAlbum = async (req, res, next) => {
+  try {
+    const name = String(req.body.name || req.query.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'Nombre requerido' });
+    if (RESERVED_ALBUMS.includes(name)) return res.status(400).json({ message: 'No se puede eliminar un álbum predefinido' });
+    const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    provider.albums = (provider.albums || []).filter((a) => a !== name);
+    (provider.photos || []).forEach((p) => { p.albums = (p.albums || []).filter((a) => a !== name); });
+    provider.markModified('photos');
+    await provider.save();
+    res.json({ photos: provider.photos, albums: provider.albums });
   } catch (err) {
     next(err);
   }
@@ -265,4 +370,8 @@ const profileQr = async (req, res, next) => {
   }
 };
 
-module.exports = { register, getMine, list, getOne, create, update, updateAvailability, uploadPhotos, uploadProfilePhoto, profileQr };
+module.exports = {
+  register, getMine, list, getOne, create, update, updateAvailability,
+  uploadPhotos, deletePhoto, updatePhotoAlbums, createAlbum, deleteAlbum,
+  uploadProfilePhoto, profileQr,
+};

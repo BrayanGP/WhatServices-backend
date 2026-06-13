@@ -232,8 +232,11 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const logo = photoUrl(provider.profilePhoto);
   if (logo) { await sendMedia(phone, logo, head, conv.instance); saveMsg(conv, 'bot', `[perfil] ${head}`); }
   else await reply(conv, phone, head);
-  // Trabajos
-  const photos = (provider.photos || []).map(photoUrl).filter(Boolean);
+  // Trabajos: solo las fotos del album "WhatsApp" (max 5). Si aun no hay ninguna marcada
+  // (proveedor sin migrar), cae a las primeras 5 de la galeria para no quedar vacio.
+  const all = provider.photos || [];
+  const wa = all.filter((p) => (p.albums || []).includes('WhatsApp'));
+  const photos = (wa.length ? wa : all).slice(0, 5).map(photoUrl).filter(Boolean);
   if (photos.length) {
     await reply(conv, phone, fill(cfg.messages.worksIntro, { business: provider.businessName }));
     for (const url of photos) {
