@@ -24,8 +24,8 @@ const register = async (req, res, next) => {
     if (!password || password.length < 6) {
       return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
     }
-    if (!businessName) {
-      return res.status(400).json({ message: 'businessName es obligatorio' });
+    if (!businessName || !city) {
+      return res.status(400).json({ message: 'businessName y city son obligatorios' });
     }
     // El usuario debe aceptar los Términos y Condiciones y el Aviso de Privacidad para registrarse.
     if (!acceptedTerms || !acceptedPrivacy) {

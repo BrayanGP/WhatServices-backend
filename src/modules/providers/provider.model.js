@@ -6,7 +6,7 @@ const providerSchema = new mongoose.Schema({
   ownerName: { type: String, required: true },
   phone: { type: String, required: true },
   address: { type: String },
-  city: { type: String },
+  city: { type: String, required: true },
   postalCode: { type: String, index: true },
   // GeoJSON Point [lng, lat] para busqueda por cercania ($near).
   // Sin default en `type`: así, si no hay coordenadas, el campo `location` no se
