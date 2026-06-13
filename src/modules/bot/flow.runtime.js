@@ -123,6 +123,7 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
     const mode = ctx.vars.searchMode || params.mode || 'score';
     ctx.vars.searchMode = mode;
     const providers = await findProviders(ctx.service, { mode, postalCode: ctx.cp });
+    console.log(`[search] service="${ctx.service}" mode=${mode} cp=${ctx.cp} → ${providers.length} result(s): ${providers.map((p) => p.businessName).join(', ') || '—'}`);
     conv.suggestedProviders = providers.map((p) => p._id);
     ctx.resultsCount = providers.length;
     return providers.length ? 'found' : 'empty';
