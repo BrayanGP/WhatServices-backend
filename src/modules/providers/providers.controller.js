@@ -183,9 +183,19 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
+    const { email, ...providerFields } = req.body;
+    if (email !== undefined) {
+      const cleanEmail = email?.trim() || null;
+      if (cleanEmail) {
+        const existing = await User.findOne({ email: cleanEmail, _id: { $ne: req.user.id } });
+        if (existing) return res.status(409).json({ message: 'Este correo ya está en uso por otra cuenta.' });
+      }
+      await User.findByIdAndUpdate(req.user.id, { email: cleanEmail });
+      providerFields.email = cleanEmail;
+    }
     const provider = await Provider.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
-      req.body,
+      providerFields,
       { new: true, runValidators: true }
     );
     if (!provider) return res.status(404).json({ message: 'Provider not found' });

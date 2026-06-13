@@ -97,6 +97,24 @@ const sendList = async (number, { title = '', description = '', buttonText = 'Ve
   return !!res;
 };
 
+// Botón URL nativo (Call To Action). Una sola URL por mensaje. Opcional: imagen de encabezado.
+// Muestra un botón bonito que abre el enlace, sin pegar la URL larga en el texto.
+const sendCtaUrl = async (number, { body = ' ', buttonText = 'Abrir', url: link, footer = '', headerImage = '' }) => {
+  if (!link) return false;
+  const res = await post({
+    to: waNumber(number),
+    type: 'interactive',
+    interactive: {
+      type: 'cta_url',
+      ...(headerImage ? { header: { type: 'image', image: { link: headerImage } } } : {}),
+      body: { text: clip(body, 1024) },
+      ...(footer ? { footer: { text: clip(footer, 60) } } : {}),
+      action: { name: 'cta_url', parameters: { display_text: clip(buttonText, 20), url: link } },
+    },
+  });
+  return !!res;
+};
+
 // WhatsApp Cloud API no soporta encuestas nativas → devolvemos false (el motor cae a texto).
 const sendPoll = async () => false;
 
@@ -122,6 +140,6 @@ const sendOtp = (to, code) =>
   });
 
 module.exports = {
-  sendText, sendMedia, sendButtons, sendList, sendPoll, sendOtp, markRead, waNumber,
+  sendText, sendMedia, sendButtons, sendList, sendCtaUrl, sendPoll, sendOtp, markRead, waNumber,
   DEFAULT_INSTANCE: '',
 };

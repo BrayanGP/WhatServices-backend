@@ -15,6 +15,7 @@ const providerSchema = new mongoose.Schema({
     type: { type: String, enum: ['Point'] },
     coordinates: { type: [Number], default: undefined }, // [lng, lat]
   },
+  email: { type: String },
   description: { type: String },
   categories: [String],
   specialties: [String],
