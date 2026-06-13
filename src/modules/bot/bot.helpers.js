@@ -3,23 +3,47 @@ const Request = require('../requests/request.model');
 const Category = require('../admin/category.model');
 const { geocodeCp } = require('../../utils/geocode');
 
-// Radio de búsqueda por cercanía (metros)
-const NEAR_RADIUS_M = 20000; // 20 km
+// Radio de búsqueda por cercanía
+const NEAR_RADIUS_KM = 20; // 20 km a la redonda
+const NEAR_CANDIDATES = 80; // tope de proveedores a evaluar por búsqueda (escala local)
 
-// Busca proveedores dentro de un radio (geocodifica el CP → coordenadas → $near).
-// Devuelve null si no se pudo geocodificar (para caer al método por CP exacto).
+// Distancia entre dos coordenadas {lat,lng} en km (haversine)
+const haversineKm = (a, b) => {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
+// Coordenadas {lat,lng} de un proveedor: usa su ubicación exacta si la tiene,
+// si no, geocodifica su CP (con caché). Devuelve null si no se puede ubicar.
+const providerCoords = async (p) => {
+  const c = p.location && p.location.coordinates;
+  if (Array.isArray(c) && c.length === 2 && Number.isFinite(c[0]) && Number.isFinite(c[1])) {
+    return { lng: c[0], lat: c[1] };
+  }
+  if (p.postalCode) return geocodeCp(p.postalCode); // {lat,lng} | null
+  return null;
+};
+
+// Busca proveedores dentro de 20km del CP del cliente.
+// Geocodifica el CP del cliente y el de cada proveedor (o usa su ubicación exacta),
+// calcula distancia y devuelve los más cercanos. null si no se pudo geocodificar el CP del cliente.
 const findNearByRadius = async (base, postalCode, limit) => {
-  const coords = await geocodeCp(postalCode);
-  if (!coords) return null;
-  return Provider.find({
-    ...base,
-    location: {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [coords.lng, coords.lat] },
-        $maxDistance: NEAR_RADIUS_M,
-      },
-    },
-  }).limit(limit).lean();
+  const center = await geocodeCp(postalCode);
+  if (!center) return null;
+  const candidates = await Provider.find(base).sort({ 'rating.average': -1 }).limit(NEAR_CANDIDATES).lean();
+  const withDist = [];
+  for (const p of candidates) {
+    const co = await providerCoords(p);
+    if (!co) continue;
+    const km = haversineKm(center, co);
+    if (km <= NEAR_RADIUS_KM) withDist.push({ p, km });
+  }
+  withDist.sort((a, b) => a.km - b.km);
+  return withDist.slice(0, limit).map((x) => x.p);
 };
 // Transporte de WhatsApp: ahora WhatsApp Cloud API (Meta) en vez de Evolution.
 const { sendText, sendMedia, sendButtons, sendList, sendPoll } = require('../../utils/whatsappMeta');
