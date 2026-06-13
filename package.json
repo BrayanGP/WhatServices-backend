@@ -5,7 +5,8 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "seed": "node src/seed.js",
-    "migrate:albums": "node src/scripts/migrate-photo-albums.js"
+    "migrate:albums": "node src/scripts/migrate-photo-albums.js",
+    "diag:near": "node src/scripts/diag-near.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1062.0",
