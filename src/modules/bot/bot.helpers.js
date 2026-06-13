@@ -60,9 +60,9 @@ const { CLIENT_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 // Fijo en 0 (ignora BOT_REPLY_DELAY_MS) para responder al instante.
 const REPLY_DELAY_MS = 0;
 // Las imágenes (por URL) las entrega Meta de forma asíncrona, así que un mensaje interactivo
-// enviado justo después puede "adelantarse" y aparecer entre las fotos. Esperamos un poco
-// antes de los botones finales para que las fotos lleguen primero.
-const PHOTO_SETTLE_MS = 1500;
+// enviado justo después puede "adelantarse". Estas pausas fuerzan el orden estricto.
+const PHOTO_SETTLE_MS = 1500; // tras las fotos de trabajos, antes de la navegación final
+const ORDER_GAP_MS = 1200;    // tras la foto del card, para que llegue antes de los botones
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Rellena placeholders {key} en las plantillas de mensajes
@@ -256,7 +256,8 @@ const sendServicesList = async (conv, phone, cfg) => {
   }
 };
 
-// Muestra al profesional (tarjeta con botones bonitos) + sus trabajos + navegacion (al final).
+// Muestra al profesional en ORDEN ESTRICTO:
+// 1) foto (logo + datos)  2) Ver su perfil  3) Contactar  4) fotos de trabajos  5) ¿Qué deseas hacer?
 const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const contact = buildContact(conv, provider); // URL wa.me con saludo precargado
   const web = String(CLIENT_URL || '').split(',')[0].trim().replace(/\/$/, '');
@@ -265,24 +266,35 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
   const ratingLine = `⭐ ${provider.rating?.average || 0}/5 (${provider.rating?.count || 0})${provider.city ? ` · ${provider.city}` : ''}`;
   const cardBody = `*${provider.businessName}*\n${ratingLine}${provider.description ? `\n${provider.description}` : ''}`;
 
-  // 1) Tarjeta con botón URL "Contactar" (logo como encabezado). Sin pegar la URL larga.
-  let cardOk = false;
-  try {
-    cardOk = await sendCtaUrl(phone, {
-      headerImage: logo || '',
-      body: cardBody,
-      buttonText: '💬 Contactar',
-      url: contact,
-      footer: 'WhatServices',
-    });
-  } catch (e) { /* fallback abajo */ }
-  if (!cardOk) {
-    if (logo) await sendMedia(phone, logo, `${cardBody}\n\n💬 Contactar: ${contact}`, conv.instance);
-    else await reply(conv, phone, `${cardBody}\n\n💬 Contactar: ${contact}`);
-  }
+  // 1) LA FOTO (logo + datos). Pausa para que la imagen llegue antes de los botones.
+  if (logo) await sendMedia(phone, logo, cardBody, conv.instance);
+  else await reply(conv, phone, cardBody);
   saveMsg(conv, 'bot', `[perfil] ${provider.businessName}`);
+  if (logo) await sleep(ORDER_GAP_MS);
 
-  // 2) Trabajos: solo el album "WhatsApp" (máx 5). Fallback a las primeras 5 si no hay marcadas.
+  // 2) VER SU PERFIL (botón URL)
+  if (profileUrl) {
+    let okP = false;
+    try {
+      okP = await sendCtaUrl(phone, {
+        body: `👤 Mira el perfil completo de *${provider.businessName}*: reseñas, todas sus fotos y más.`,
+        buttonText: '👤 Ver su perfil', url: profileUrl, footer: 'WhatServices',
+      });
+    } catch (e) { /* fallback */ }
+    if (!okP) await reply(conv, phone, `👤 Ver su perfil: ${profileUrl}`);
+  }
+
+  // 3) CONTACTAR (botón URL)
+  let okC = false;
+  try {
+    okC = await sendCtaUrl(phone, {
+      body: `💬 Escríbele directo por WhatsApp a *${provider.businessName}*.`,
+      buttonText: '💬 Contactar', url: contact, footer: 'WhatServices',
+    });
+  } catch (e) { /* fallback */ }
+  if (!okC) await reply(conv, phone, `💬 Contactar: ${contact}`);
+
+  // 4) FOTOS de trabajos: solo el album "WhatsApp" (máx 5). Fallback a las primeras 5.
   const all = provider.photos || [];
   const wa = all.filter((p) => (p.albums || []).includes('WhatsApp'));
   const photos = (wa.length ? wa : all).slice(0, 5).map(photoUrl).filter(Boolean);
@@ -292,26 +304,11 @@ const sendProviderWorks = async (conv, phone, provider, cfg) => {
       await sendMedia(phone, url, '', conv.instance);
       saveMsg(conv, 'bot', '[trabajo]');
     }
-  } else {
-    await reply(conv, phone, `*${provider.businessName}* aún no ha subido fotos de sus trabajos. 📷`);
+    // Espera a que las fotos lleguen antes de la navegación final (evita que se atasque).
+    await sleep(PHOTO_SETTLE_MS);
   }
 
-  // Espera a que las fotos lleguen antes de los mensajes interactivos finales (evita que se atasquen).
-  await sleep(PHOTO_SETTLE_MS);
-
-  // 3) Botón URL "Ver su perfil" (perfil completo: reseñas, todas las fotos, contacto).
-  if (profileUrl) {
-    try {
-      await sendCtaUrl(phone, {
-        body: `👤 Mira el perfil completo de *${provider.businessName}*: reseñas, todas sus fotos y más.`,
-        buttonText: '👤 Ver su perfil',
-        url: profileUrl,
-        footer: 'WhatServices',
-      });
-    } catch (e) { /* noop */ }
-  }
-
-  // 4) Navegación (al FINAL): volver a la lista / otra búsqueda.
+  // 5) ¿QUÉ DESEAS HACER? (al final): volver a la lista / otra búsqueda.
   let ok = false;
   try {
     ok = await sendButtons(phone, {
