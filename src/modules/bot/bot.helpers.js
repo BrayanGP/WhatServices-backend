@@ -33,15 +33,18 @@ const providerCoords = async (p) => {
 // calcula distancia y devuelve los más cercanos. null si no se pudo geocodificar el CP del cliente.
 const findNearByRadius = async (base, postalCode, limit) => {
   const center = await geocodeCp(postalCode);
-  if (!center) return null;
+  if (!center) { console.log(`[near] no se pudo geocodificar el CP del cliente: ${postalCode}`); return null; }
   const candidates = await Provider.find(base).sort({ 'rating.average': -1 }).limit(NEAR_CANDIDATES).lean();
   const withDist = [];
+  const diag = [];
   for (const p of candidates) {
     const co = await providerCoords(p);
-    if (!co) continue;
+    if (!co) { diag.push(`${p.businessName}(cp:${p.postalCode || '—'}→sin coords)`); continue; }
     const km = haversineKm(center, co);
+    diag.push(`${p.businessName}(cp:${p.postalCode || '—'}→${km.toFixed(1)}km)`);
     if (km <= NEAR_RADIUS_KM) withDist.push({ p, km });
   }
+  console.log(`[near] cliente cp=${postalCode} center=${center.lat.toFixed(3)},${center.lng.toFixed(3)} | candidatos=${candidates.length} | ${diag.join(', ')} | dentro de ${NEAR_RADIUS_KM}km=${withDist.length}`);
   withDist.sort((a, b) => a.km - b.km);
   return withDist.slice(0, limit).map((x) => x.p);
 };

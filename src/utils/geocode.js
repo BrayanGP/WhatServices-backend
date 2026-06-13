@@ -1,42 +1,65 @@
 const GeoCp = require('../modules/bot/geocp.model');
 
-// Geocodifica un código postal de México (5 dígitos) a coordenadas { lat, lng }.
-// Usa Nominatim (OpenStreetMap), gratis y sin API key, con caché en BD para no
-// repetir consultas (su política pide pocas consultas + User-Agent).
-// Devuelve { lat, lng } o null si no se pudo resolver.
+const fetchJson = async (url, headers = {}) => {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const res = await fetch(url, { headers, signal: ctrl.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+};
+
+// Zippopotam: API específica de códigos postales (confiable para CP de México).
+// https://api.zippopotam.us/MX/42700 → { places: [{ latitude, longitude }] }
+const viaZippopotam = async (code) => {
+  const data = await fetchJson(`https://api.zippopotam.us/MX/${code}`);
+  const place = data && Array.isArray(data.places) && data.places[0];
+  if (!place) return null;
+  const lat = Number(place.latitude), lng = Number(place.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+};
+
+// Nominatim (OpenStreetMap) como respaldo.
+const viaNominatim = async (code) => {
+  const data = await fetchJson(
+    `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=mx&postalcode=${encodeURIComponent(code)}`,
+    { 'User-Agent': 'WhatServices/1.0 (contacto@whatservice.org)', 'Accept-Language': 'es' }
+  );
+  const r = Array.isArray(data) && data[0];
+  if (!r || !r.lat || !r.lon) return null;
+  const lat = Number(r.lat), lng = Number(r.lon);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+};
+
+// Geocodifica un código postal de México (5 dígitos) a { lat, lng }.
+// Cachea SOLO los aciertos (los fallos se reintentan, no se cachean) para no
+// dejar un CP marcado como inexistente por una caída temporal del servicio.
 const geocodeCp = async (cp) => {
   const code = String(cp || '').match(/\b\d{5}\b/)?.[0];
   if (!code) return null;
 
-  // 1) Caché
+  // 1) Caché (solo positivos)
   try {
     const cached = await GeoCp.findOne({ cp: code }).lean();
-    if (cached) return cached.found ? { lat: cached.lat, lng: cached.lng } : null;
-  } catch (e) { /* sigue a la consulta externa */ }
-
-  // 2) Consulta externa (con timeout para no atorar al bot)
-  let lat = null, lng = null;
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=mx&postalcode=${encodeURIComponent(code)}`;
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'WhatServices/1.0 (contacto@whatservice.org)', 'Accept-Language': 'es' },
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    if (res.ok) {
-      const arr = await res.json();
-      if (Array.isArray(arr) && arr[0] && arr[0].lat && arr[0].lon) {
-        lat = Number(arr[0].lat); lng = Number(arr[0].lon);
-      }
+    if (cached && cached.found && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)) {
+      return { lat: cached.lat, lng: cached.lng };
     }
-  } catch (e) { /* sin red / abort → cae a null */ }
+  } catch (e) { /* sigue */ }
 
-  // 3) Guarda en caché (positivo o negativo) y devuelve
-  const found = Number.isFinite(lat) && Number.isFinite(lng);
-  try { await GeoCp.updateOne({ cp: code }, { $set: { lat, lng, found } }, { upsert: true }); } catch (e) { /* noop */ }
-  return found ? { lat, lng } : null;
+  // 2) Zippopotam → Nominatim
+  const coords = (await viaZippopotam(code)) || (await viaNominatim(code));
+
+  // 3) Guarda solo si se encontró
+  if (coords) {
+    try { await GeoCp.updateOne({ cp: code }, { $set: { ...coords, found: true } }, { upsert: true }); } catch (e) { /* noop */ }
+    return coords;
+  }
+  return null;
 };
 
 module.exports = { geocodeCp };
