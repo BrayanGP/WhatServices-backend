@@ -19,7 +19,10 @@ const providerSchema = new mongoose.Schema({
   categories: [String],
   specialties: [String],
   profilePhoto: { url: String, publicId: String }, // foto que se muestra en el catalogo de WhatsApp
-  photos: [{ url: String, publicId: String }],      // galeria de trabajos
+  // Galeria de trabajos. Cada foto puede pertenecer a varios albumes (categorias del proveedor).
+  // 'default' = todas (N fotos). 'WhatsApp' = las que muestra el bot (max 5, no se borra el album).
+  photos: [{ url: String, publicId: String, albums: { type: [String], default: ['default'] } }],
+  albums: { type: [String], default: [] },          // categorias propias creadas por el proveedor (ademas de las predefinidas)
   availability: {
     type: String,
     enum: ['available', 'busy', 'inactive'],
@@ -50,4 +53,12 @@ const providerSchema = new mongoose.Schema({
 // Indice geoespacial para busquedas por cercania (sparse: ignora docs sin location)
 providerSchema.index({ location: '2dsphere' }, { sparse: true });
 
-module.exports = mongoose.model('Provider', providerSchema);
+const Provider = mongoose.model('Provider', providerSchema);
+
+// Albumes predefinidos (no se pueden eliminar). WhatsApp tiene tope de 5 fotos (las que muestra el bot).
+Provider.WHATSAPP_ALBUM = 'WhatsApp';
+Provider.DEFAULT_ALBUM = 'default';
+Provider.WHATSAPP_MAX = 5;
+Provider.RESERVED_ALBUMS = [Provider.WHATSAPP_ALBUM, Provider.DEFAULT_ALBUM];
+
+module.exports = Provider;
