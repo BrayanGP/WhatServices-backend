@@ -17,14 +17,18 @@ const haversineKm = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-// Coordenadas {lat,lng} de un proveedor: usa su ubicación exacta si la tiene,
-// si no, geocodifica su CP (con caché). Devuelve null si no se puede ubicar.
+// Coordenadas {lat,lng} de un proveedor para la búsqueda por cercanía.
+// Se prioriza el CP (es el campo vigente del registro; la "ubicación exacta" se
+// quitó y puede tener datos viejos/erróneos). Solo si no hay CP se usa location.
 const providerCoords = async (p) => {
+  if (p.postalCode) {
+    const byCp = await geocodeCp(p.postalCode);
+    if (byCp) return byCp;
+  }
   const c = p.location && p.location.coordinates;
   if (Array.isArray(c) && c.length === 2 && Number.isFinite(c[0]) && Number.isFinite(c[1])) {
     return { lng: c[0], lat: c[1] };
   }
-  if (p.postalCode) return geocodeCp(p.postalCode); // {lat,lng} | null
   return null;
 };
 

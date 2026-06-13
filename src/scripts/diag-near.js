@@ -28,7 +28,9 @@ const run = async () => {
 
   for (const p of all) {
     const hasLoc = Array.isArray(p.location?.coordinates) && p.location.coordinates.length === 2;
-    let coords = hasLoc ? { lng: p.location.coordinates[0], lat: p.location.coordinates[1] } : (p.postalCode ? await geocodeCp(p.postalCode) : null);
+    // Misma lógica que el bot: CP primero, ubicación solo como respaldo.
+    let coords = (p.postalCode ? await geocodeCp(p.postalCode) : null);
+    if (!coords && hasLoc) coords = { lng: p.location.coordinates[0], lat: p.location.coordinates[1] };
     const km = center && coords ? haversineKm(center, coords).toFixed(1) + ' km' : 'N/D';
     console.log(`- ${p.businessName} | cp:${p.postalCode || '—'} | avail:${p.availability} | blocked:${p.isBlocked} | ubicExacta:${hasLoc} | dist:${km} | cats:[${(p.categories || []).join(', ')}]`);
   }
