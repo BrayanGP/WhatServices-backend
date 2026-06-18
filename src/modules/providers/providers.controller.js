@@ -4,7 +4,7 @@ const Provider = require('./provider.model');
 const User = require('../users/user.model');
 const Otp = require('../auth/otp.model');
 const { signTokens, COOKIE_OPTS } = require('../../utils/tokens');
-const { fileUrl } = require('../../middleware/upload');
+const { fileUrl, deleteFile } = require('../../middleware/upload');
 const { CLIENT_URL } = require('../../config/env');
 
 const OTP_VERIFIED_TTL_MS = 30 * 60 * 1000; // el OTP verificado vale 30 min para completar el registro
@@ -271,8 +271,11 @@ const deletePhoto = async (req, res, next) => {
     if (!publicId) return res.status(400).json({ message: 'publicId requerido' });
     const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
     if (!provider) return res.status(404).json({ message: 'Provider not found' });
+    const existed = (provider.photos || []).some((p) => p.publicId === publicId);
     provider.photos = (provider.photos || []).filter((p) => p.publicId !== publicId);
     await provider.save();
+    // Borra el archivo del almacenamiento (best-effort) para no dejar huérfanos
+    if (existed) await deleteFile(publicId);
     res.json({ photos: provider.photos, albums: provider.albums });
   } catch (err) {
     next(err);
