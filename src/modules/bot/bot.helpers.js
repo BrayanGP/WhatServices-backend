@@ -396,7 +396,7 @@ const sendCarousel = async (conv, phone, cards = [], cfg) => {
 };
 
 module.exports = {
-  REPLY_DELAY_MS, sleep, fill, getPostalCode, getScore, findProviders, saveMsg,
+  REPLY_DELAY_MS, sleep, fill, getPostalCode, getScore, haversineKm, findProviders, saveMsg,
   waNumber, buildContact, photoUrl, startRequest, completeRequest, reply,
   sendCatalog, sendResultsNav, sendProviderWorks, parseSelection, sendServicesList,
   sendButtonsNode, sendListNode, sendPollNode, sendCarousel,
