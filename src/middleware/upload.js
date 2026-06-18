@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const {
   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
   S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_REGION, S3_PUBLIC_URL,
@@ -124,4 +124,22 @@ const fileUrl = (file) => {
   return { url: `${base}/uploads/${sub}${file.filename}`, publicId: `${sub}${file.filename}` };
 };
 
-module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl, withFolder, s3Client, s3Bucket };
+// Borra un archivo subido por su publicId (key de S3, public_id de Cloudinary, o ruta local).
+// Best-effort: nunca lanza (si falla, solo loguea) para no romper el borrado en BD.
+const deleteFile = async (publicId) => {
+  if (!publicId) return;
+  try {
+    if (storageMode === 's3' && s3Client) {
+      await s3Client.send(new DeleteObjectCommand({ Bucket: s3Bucket, Key: publicId }));
+    } else if (storageMode === 'cloudinary' && cloudinary) {
+      await cloudinary.uploader.destroy(publicId);
+    } else {
+      const p = path.join(uploadsRoot, publicId);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+  } catch (e) {
+    console.error('[upload] no se pudo borrar el archivo', publicId, ':', e.message);
+  }
+};
+
+module.exports = { upload, cloudinary, storageMode, useCloudinary, fileUrl, withFolder, deleteFile, s3Client, s3Bucket };
