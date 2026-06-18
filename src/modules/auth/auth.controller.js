@@ -6,6 +6,7 @@ const Otp = require('./otp.model');
 const Setting = require('../admin/setting.model');
 const evolution = require('../../utils/evolution');
 const meta = require('../../utils/whatsappMeta');
+const twilio = require('../../utils/twilio');
 const { modulesForUser } = require('../../utils/permissions');
 const { fileUrl } = require('../../middleware/upload');
 const { JWT_SECRET, JWT_REFRESH_SECRET, NODE_ENV, OTP_ENABLED } = require('../../config/env');
@@ -175,8 +176,8 @@ const forgotPassword = async (req, res, next) => {
       user.resetCodeAttempts = 0;
       await user.save();
       try {
-        // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
-        await meta.sendOtp(req.body.phone, code);
+        // OTP por SMS (Twilio)
+        await twilio.sendOtp(req.body.phone, code);
       } catch (e) { console.error('[forgotPassword] no se pudo enviar código:', e.message); }
     }
     res.json({ ok: true });
@@ -264,8 +265,8 @@ const registerSendOtp = async (req, res, next) => {
     if (!otp || (otp.blockedUntil && otp.blockedUntil.getTime() <= now)) { set.attempts = 0; set.blockedUntil = null; }
     otp = await Otp.findOneAndUpdate({ phone: d10, purpose: 'register' }, set, { upsert: true, new: true });
     try {
-      // OTP por WhatsApp Cloud API (Meta) usando template de autenticación
-      await meta.sendOtp(req.body.phone, code);
+      // OTP por SMS (Twilio)
+      await twilio.sendOtp(req.body.phone, code);
     } catch (e) { console.error('[otp] no se pudo enviar:', e.message); }
     res.json({ ok: true, expiresInMs: OTP_TTL_MS });
   } catch (err) {
