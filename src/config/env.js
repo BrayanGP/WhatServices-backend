@@ -52,5 +52,5 @@ module.exports = {
   // ---- Twilio (SMS para OTP) ----
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || '',
-  TWILIO_FROM: process.env.TWILIO_FROM || '', // número remitente, ej. +16082925031
+  TWILIO_FROM: process.env.TWILIO_FROM || '', // número remitente de Twilio (E.164)
 };
