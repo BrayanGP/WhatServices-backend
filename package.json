@@ -3,6 +3,7 @@
   "version": "1.0.1",
   "scripts": {
     "start": "node src/app.js",
+    "test": "node --test src/tests/logic.test.js",
     "dev": "nodemon src/app.js",
     "seed": "node src/seed.js",
     "migrate:albums": "node src/scripts/migrate-photo-albums.js",
