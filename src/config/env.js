@@ -48,4 +48,9 @@ module.exports = {
   TEMPLATE_LANG: process.env.TEMPLATE_LANG || 'es_MX',
   // OTP por WhatsApp: desactívalo (OTP_ENABLED=false) hasta que Meta apruebe el template.
   OTP_ENABLED: process.env.OTP_ENABLED !== 'false',
+
+  // ---- Twilio (SMS para OTP) ----
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || '',
+  TWILIO_FROM: process.env.TWILIO_FROM || '', // número remitente, ej. +16082925031
 };
