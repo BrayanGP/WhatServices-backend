@@ -17,6 +17,12 @@ const providerSchema = new mongoose.Schema({
   },
   email: { type: String },
   description: { type: String },
+  schedule: [{
+    day:   { type: String },
+    open:  { type: Boolean, default: true },
+    from:  { type: String },
+    to:    { type: String },
+  }],
   categories: [String],
   specialties: [String],
   profilePhoto: { url: String, publicId: String }, // foto que se muestra en el catalogo de WhatsApp
