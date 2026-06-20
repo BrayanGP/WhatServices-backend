@@ -9,6 +9,7 @@ const reviewSchema = new mongoose.Schema({
   deviceId:     { type: String },
   rating:       { type: Number, required: true, min: 1, max: 5 },
   comment:      { type: String },
+  media:        [{ url: String, publicId: String }], // fotos que sube el cliente con su reseña
   source:       { type: String, enum: ['web', 'whatsapp'], default: 'web' },
 }, { timestamps: true });
 

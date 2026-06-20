@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider,
+  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider, deleteProvider,
+  getMediaOverview, deleteMediaFile,
   getUsers, toggleBlockUser,
   getCategories, createCategory, updateCategory, reviewCategory, deleteCategory,
   updateProviderCategories,
@@ -31,6 +32,11 @@ router.patch('/providers/:id/reset-password', resetProviderPassword);
 router.patch('/providers/:id/verify', toggleVerify);
 router.patch('/providers/:id/block', toggleBlockProvider);
 router.patch('/providers/:id/categories', updateProviderCategories);
+router.delete('/providers/:id', adminOnly, deleteProvider);
+
+// Multimedia (admin): panorama + borrado de archivos (incluye huérfanos)
+router.get('/media', getMediaOverview);
+router.delete('/media', adminOnly, deleteMediaFile);
 
 router.get('/users', getUsers);
 router.post('/users', adminOnly, createUser);

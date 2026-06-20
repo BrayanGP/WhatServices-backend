@@ -1,5 +1,6 @@
 const Review = require('./review.model');
 const Provider = require('../providers/provider.model');
+const { fileUrl } = require('../../middleware/upload');
 
 // Recalcula y guarda el rating del proveedor
 const recalcRating = async (providerId) => {
@@ -43,9 +44,17 @@ const upsert = async (req, res, next) => {
       return res.status(400).json({ message: 'providerId, rating y deviceId son requeridos' });
     }
 
+    const update = { rating: Number(rating), comment, reviewerName, source: 'web' };
+    // Fotos opcionales que sube el cliente (máx 4). Se agregan a las existentes.
+    const newMedia = (req.files || []).map((f) => fileUrl(f)).slice(0, 4);
+    if (newMedia.length) {
+      const existing = await Review.findOne({ providerId, deviceId }).lean();
+      update.media = [...((existing && existing.media) || []), ...newMedia].slice(0, 4);
+    }
+
     const review = await Review.findOneAndUpdate(
       { providerId, deviceId },
-      { rating, comment, reviewerName, source: 'web' },
+      update,
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
