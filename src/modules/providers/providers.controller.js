@@ -232,31 +232,14 @@ const uploadPhotos = async (req, res, next) => {
     const provider = await Provider.findOne({ _id: req.params.id, userId: req.user.id });
     if (!provider) return res.status(404).json({ message: 'Provider not found' });
 
-    // Album destino (campo del formulario o query). Por defecto 'default'.
-    const album = String(req.body.album || req.query.album || DEFAULT_ALBUM).trim() || DEFAULT_ALBUM;
     const files = req.files || [];
     if (!files.length) return res.status(400).json({ message: 'No files' });
-
-    // Tope total
     if (provider.photos.length + files.length > MAX_PHOTOS_TOTAL) {
       return res.status(400).json({ message: `Máximo ${MAX_PHOTOS_TOTAL} fotos en total` });
     }
-    // El album WhatsApp solo admite 5 (es lo que muestra el bot)
-    if (album === WHATSAPP_ALBUM) {
-      const room = WHATSAPP_MAX - countInAlbum(provider, WHATSAPP_ALBUM);
-      if (files.length > room) {
-        return res.status(400).json({ message: `El álbum de WhatsApp admite máximo ${WHATSAPP_MAX} fotos${room > 0 ? ` (te quedan ${room})` : ''}.` });
-      }
-    }
-    // Toda foto pertenece a 'default'; ademas al album destino si es distinto.
-    const albums = album && album !== DEFAULT_ALBUM ? [DEFAULT_ALBUM, album] : [DEFAULT_ALBUM];
-    const newPhotos = files.map((f) => ({ ...fileUrl(f), albums: [...albums] }));
+    // Toda foto nueva entra a "Todas" (default). Desde ahí el proveedor la reparte a sus categorías.
+    const newPhotos = files.map((f) => ({ ...fileUrl(f), albums: [DEFAULT_ALBUM] }));
     provider.photos.push(...newPhotos);
-
-    // Si es un album propio nuevo, registrarlo en la lista del proveedor
-    if (album && !RESERVED_ALBUMS.includes(album) && !provider.albums.includes(album)) {
-      provider.albums.push(album);
-    }
     await provider.save();
     res.json({ photos: provider.photos, albums: provider.albums });
   } catch (err) {

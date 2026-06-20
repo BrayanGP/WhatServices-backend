@@ -8,6 +8,10 @@ const Intent = require('../bot/intent.model');
 const BotFlow = require('../bot/botflow.model');
 const FlowTemplate = require('../bot/flowtemplate.model');
 const Request = require('../requests/request.model');
+const Review = require('../reviews/review.model');
+const { deleteFile, s3Client, s3Bucket, storageMode } = require('../../middleware/upload');
+const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { S3_PUBLIC_URL, BACKEND_PUBLIC_URL } = require('../../config/env');
 const Role = require('./role.model');
 const Setting = require('./setting.model');
 const { MODULES } = require('../../config/modules');
@@ -63,6 +67,97 @@ const resetProviderPassword = async (req, res, next) => {
     await User.findByIdAndUpdate(provider.userId, { passwordHash });
 
     res.json({ password: newPassword });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Elimina DEFINITIVAMENTE un proveedor: su perfil, su cuenta de usuario, sus reseñas,
+// sus solicitudes y todos sus archivos en el almacenamiento (S3/Cloudinary/local).
+const deleteProvider = async (req, res, next) => {
+  try {
+    const provider = await Provider.findById(req.params.id);
+    if (!provider) return res.status(404).json({ message: 'Provider not found' });
+
+    // 1) Borra archivos del almacenamiento (fotos de galería + foto de perfil)
+    const keys = [
+      ...((provider.photos || []).map((p) => p.publicId)),
+      provider.profilePhoto?.publicId,
+    ].filter(Boolean);
+    for (const k of keys) await deleteFile(k);
+
+    // 2) Borra reseñas y desvincula al proveedor de las solicitudes (sin borrar el historial del cliente)
+    await Review.deleteMany({ providerId: provider._id }).catch(() => {});
+    await Request.updateMany({ suggestedProviders: provider._id }, { $pull: { suggestedProviders: provider._id } }).catch(() => {});
+    await Request.updateMany({ assignedProvider: provider._id }, { $unset: { assignedProvider: '' } }).catch(() => {});
+
+    // 3) Borra el perfil y la cuenta de usuario asociada
+    const userId = provider.userId;
+    await provider.deleteOne();
+    if (userId) await User.deleteOne({ _id: userId }).catch(() => {});
+
+    res.json({ ok: true, deleted: { provider: provider._id, user: userId || null, files: keys.length } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// URL pública de un objeto del bucket por su key (igual que fileUrl en modo s3)
+const s3KeyUrl = (key) => {
+  const base = (BACKEND_PUBLIC_URL || '').replace(/\/$/, '');
+  return S3_PUBLIC_URL ? `${S3_PUBLIC_URL.replace(/\/$/, '')}/${key}` : `${base}/files/${key}`;
+};
+
+// Panorama de multimedia para el admin: media por proveedor, media de reseñas y archivos huérfanos.
+const getMediaOverview = async (req, res, next) => {
+  try {
+    const providers = await Provider.find({})
+      .select('businessName ownerName photos profilePhoto')
+      .lean();
+    const reviews = await Review.find({ 'media.0': { $exists: true } })
+      .select('providerId reviewerName media')
+      .lean();
+
+    // Conjunto de keys referenciadas en BD
+    const referenced = new Set();
+    providers.forEach((p) => {
+      (p.photos || []).forEach((ph) => ph.publicId && referenced.add(ph.publicId));
+      if (p.profilePhoto?.publicId) referenced.add(p.profilePhoto.publicId);
+    });
+    reviews.forEach((r) => (r.media || []).forEach((m) => m.publicId && referenced.add(m.publicId)));
+
+    // Huérfanos: solo se pueden detectar en modo S3 (listando el bucket)
+    let orphans = [];
+    let orphansSupported = false;
+    if (storageMode === 's3' && s3Client && s3Bucket) {
+      orphansSupported = true;
+      let token;
+      do {
+        const out = await s3Client.send(new ListObjectsV2Command({ Bucket: s3Bucket, ContinuationToken: token }));
+        (out.Contents || []).forEach((o) => {
+          if (!referenced.has(o.Key)) orphans.push({ key: o.Key, url: s3KeyUrl(o.Key), size: o.Size });
+        });
+        token = out.IsTruncated ? out.NextContinuationToken : undefined;
+      } while (token);
+    }
+
+    res.json({ providers, reviews, orphans, orphansSupported });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Borra un archivo de multimedia desde el admin: del almacenamiento Y de cualquier referencia
+// (foto de proveedor, foto de perfil o media de reseña). Sirve también para huérfanos.
+const deleteMediaFile = async (req, res, next) => {
+  try {
+    const publicId = req.body.publicId || req.query.publicId;
+    if (!publicId) return res.status(400).json({ message: 'publicId requerido' });
+    await deleteFile(publicId);
+    await Provider.updateMany({ 'photos.publicId': publicId }, { $pull: { photos: { publicId } } }).catch(() => {});
+    await Provider.updateMany({ 'profilePhoto.publicId': publicId }, { $unset: { profilePhoto: '' } }).catch(() => {});
+    await Review.updateMany({ 'media.publicId': publicId }, { $pull: { media: { publicId } } }).catch(() => {});
+    res.json({ ok: true, deleted: publicId });
   } catch (err) {
     next(err);
   }
@@ -398,7 +493,7 @@ const replyConversation = async (req, res, next) => {
 
 // ----- WhatsApp / Instancias (Evolution) -----
 
-const { BACKEND_PUBLIC_URL } = require('../../config/env');
+// (BACKEND_PUBLIC_URL ya se importa al inicio del archivo)
 
 // URL publica del backend para el webhook. Prioriza BACKEND_PUBLIC_URL porque
 // el host de la peticion puede venir del proxy del admin (dominio equivocado).
@@ -550,7 +645,7 @@ const updateRequest = async (req, res, next) => {
 
 // ----- Dashboard / Estadisticas -----
 
-const Review = require('../reviews/review.model');
+// (Review ya se importa al inicio del archivo)
 const TZ = 'America/Mexico_City';
 
 const getStats = async (req, res, next) => {
@@ -931,7 +1026,8 @@ const deleteRole = async (req, res, next) => {
 };
 
 module.exports = {
-  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider, updateProviderCategories,
+  getProviders, resetProviderPassword, toggleVerify, toggleBlockProvider, updateProviderCategories, deleteProvider,
+  getMediaOverview, deleteMediaFile,
   createUser, updateUserRole, resetUserPassword,
   getModules, getRoles, createRole, updateRole, deleteRole,
   getUsers, toggleBlockUser,
