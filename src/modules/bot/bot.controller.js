@@ -104,8 +104,10 @@ const processIncoming = async (msg, instance) => {
     if (conv.humanTakeover) { await conv.save(); return; }
 
     // ---- Registro del cliente (boot: primer mensaje / saludo) ----
+    console.log('[Bot] step:', conv.step, '| phone:', last10(phone));
     if (conv.step === 'IDLE') {
       const clientExists = await Client.exists({ phone: last10(phone) });
+      console.log('[Bot] IDLE → clientExists:', !!clientExists);
       if (!clientExists) {
         conv.step = 'AWAITING_CLIENT_NAME';
         await reply(conv, phone, '¡Hola! 🙌 Para conectarte con los mejores profesionales solo necesitamos saber *¿cómo nos podemos dirigir hacia ti?*');
@@ -133,6 +135,7 @@ const processIncoming = async (msg, instance) => {
 
     // ---- Configuracion del bot (on/off + horario) ----
     const cfg = await BotConfig.getSingleton();
+    console.log('[Bot] cfg.enabled:', cfg.enabled, '| isOpenNow:', cfg.isOpenNow());
     if (!cfg.enabled) { await conv.save(); return; } // bot apagado: no responde
 
     if (!cfg.isOpenNow()) {
