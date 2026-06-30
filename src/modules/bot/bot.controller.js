@@ -113,12 +113,16 @@ const processIncoming = async (msg, instance) => {
         await conv.save();
         return;
       }
-      // Cliente existente: guardar waName si cambió y saludar por nombre
+      // Cliente existente: guardar waName si cambió y saludar por nombre (solo primera vez por sesión)
       if (name && name.trim() && name.trim() !== client.waName) {
         await Client.updateOne({ _id: client._id }, { waName: name.trim() });
       }
       if (!conv.name) conv.name = client.name;
-      await reply(conv, phone, `¡Hola, *${client.name}*! 👋`);
+      if (!conv.context?.greeted) {
+        conv.context = { ...conv.context, greeted: true };
+        conv.markModified('context');
+        await reply(conv, phone, `¡Hola, *${client.name}*! 👋`);
+      }
     }
 
     // ---- Captura del nombre cuando lo estábamos esperando ----
