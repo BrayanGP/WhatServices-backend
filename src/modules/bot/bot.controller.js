@@ -119,27 +119,12 @@ const processIncoming = async (msg, instance) => {
       conv.name = clientName;
       // Retoma el servicio que eligió antes de que le pidiéramos el nombre
       const pendingService = conv.context?.pendingService;
-      const pendingFlowNode = conv.context?.flow?.nodeId; // nodo del flujo visual donde se pausó
       if (pendingService) {
-        conv.context = { ...conv.context, pendingService: undefined };
+        conv.context = { ...conv.context, pendingService: undefined, flow: undefined };
         conv.markModified('context');
-        const cfg2 = await BotConfig.getSingleton();
-        if (pendingFlowNode) {
-          // Flujo visual: retomar desde el nodo que pausó (el motor lo reanudará al avanzar al siguiente)
-          conv.step = 'IDLE';
-          const flow = await BotFlow.getPublished();
-          if (flow) {
-            await reply(conv, phone, `¡Gracias, *${clientName}*! 🙌 Enseguida te mostramos los profesionales.`);
-            await conv.save();
-            // Ejecutar el flujo desde el nodo que sigue al startRequest
-            await runFlow({ conv, phone, text: pendingService, lower: pendingService.toLowerCase(), name: clientName, cfg: cfg2, flow });
-            await conv.save();
-            return;
-          }
-        }
-        // FSM legacy: continuar a AWAITING_MODE
         conv.selectedService = pendingService;
         conv.step = 'AWAITING_MODE';
+        const cfg2 = await BotConfig.getSingleton();
         await startRequest(conv, pendingService);
         await reply(conv, phone, `¡Gracias, *${clientName}*! 🙌\n\n${fill(cfg2.messages.askMode, { service: pendingService })}`);
         await conv.save();
