@@ -17,6 +17,7 @@ const categoryRoutes = require('./modules/categories/categories.routes');
 const fileRoutes = require('./modules/files/files.routes');
 const legalRoutes = require('./modules/legal/legal.routes');
 const geoRoutes = require('./modules/geo/geo.routes');
+const clientRoutes = require('./modules/clients/clients.routes');
 const { ensureLegalDocs } = require('./modules/legal/legal.service');
 const { ensureDefaultCategories } = require('./modules/categories/categories.service');
 
@@ -74,6 +75,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bot', botRoutes);
 app.use('/api/events', require('./modules/analytics/analytics.routes'));
+app.use('/api/clients', clientRoutes);
 app.use('/wa', waRoutes);
 app.use('/files', fileRoutes);
 // Documentos legales: públicos en /legal (descargas sin API key) y alias bajo /api para el front.
