@@ -18,7 +18,7 @@ const conversationSchema = new mongoose.Schema({
   step: {
     type: String,
     enum: [
-      'IDLE', 'AWAITING_SERVICE', 'AWAITING_MODE', 'AWAITING_ZIP', 'SHOWING_RESULTS',
+      'IDLE', 'AWAITING_CLIENT_NAME', 'AWAITING_SERVICE', 'AWAITING_MODE', 'AWAITING_ZIP', 'SHOWING_RESULTS',
       'RATING_SCORE', 'RATING_COMMENT', 'HUMAN', 'END',
     ],
     default: 'IDLE',
