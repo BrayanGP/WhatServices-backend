@@ -103,7 +103,18 @@ const processIncoming = async (msg, instance) => {
 
     if (conv.humanTakeover) { await conv.save(); return; }
 
-    // ---- Captura de nombre (cuando se pidió antes de mostrar resultados) ----
+    // ---- Registro del cliente (boot: primer mensaje / saludo) ----
+    if (conv.step === 'IDLE') {
+      const clientExists = await Client.exists({ phone: last10(phone) });
+      if (!clientExists) {
+        conv.step = 'AWAITING_CLIENT_NAME';
+        await reply(conv, phone, '¡Hola! 🙌 Para conectarte con los mejores profesionales solo necesitamos saber *¿cómo nos podemos dirigir hacia ti?*');
+        await conv.save();
+        return;
+      }
+    }
+
+    // ---- Captura del nombre cuando lo estábamos esperando ----
     if (conv.step === 'AWAITING_CLIENT_NAME') {
       const clientName = text.trim();
       if (clientName.length < 2) {
@@ -117,20 +128,7 @@ const processIncoming = async (msg, instance) => {
         { upsert: true, new: true },
       );
       conv.name = clientName;
-      // Retoma el servicio que eligió antes de que le pidiéramos el nombre
-      const pendingService = conv.context?.pendingService;
-      if (pendingService) {
-        conv.context = { ...conv.context, pendingService: undefined, flow: undefined };
-        conv.markModified('context');
-        conv.selectedService = pendingService;
-        conv.step = 'AWAITING_MODE';
-        const cfg2 = await BotConfig.getSingleton();
-        await startRequest(conv, pendingService);
-        await reply(conv, phone, `¡Gracias, *${clientName}*! 🙌\n\n${fill(cfg2.messages.askMode, { service: pendingService })}`);
-        await conv.save();
-        return;
-      }
-      conv.step = 'IDLE';
+      conv.step = 'IDLE'; // continúa al flujo normal (menú de servicios)
     }
 
     // ---- Configuracion del bot (on/off + horario) ----
@@ -261,17 +259,6 @@ const processIncoming = async (msg, instance) => {
     };
 
     const askMode = async (serviceName) => {
-      // Si el cliente no está registrado, pedimos su nombre primero y guardamos el servicio pendiente
-      const clientExists = await Client.exists({ phone: last10(phone) });
-      if (!clientExists) {
-        conv.context = { ...conv.context, pendingService: serviceName };
-        conv.markModified('context');
-        conv.step = 'AWAITING_CLIENT_NAME';
-        await reply(conv, phone,
-          `¡Excelente elección! 🙌 Para conectarte con los mejores profesionales de *${serviceName}* solo necesitamos saber *¿cómo te llamas?*`
-        );
-        return;
-      }
       conv.selectedService = serviceName;
       conv.step = 'AWAITING_MODE';
       await startRequest(conv, serviceName);
