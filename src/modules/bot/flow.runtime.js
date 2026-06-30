@@ -2,7 +2,9 @@ const Fuse = require('fuse.js');
 const Provider = require('../providers/provider.model');
 const Category = require('../admin/category.model');
 const Intent = require('./intent.model');
+const Client = require('../clients/client.model');
 const { CLIENT_URL } = require('../../config/env');
+const last10 = (p) => String(p || '').replace(/\D/g, '').slice(-10);
 const {
   fill, getPostalCode, getScore, findProviders, startRequest, completeRequest,
   reply, sendCatalog, sendResultsNav, sendProviderWorks, parseSelection, sendServicesList,
@@ -114,7 +116,18 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
   }
 
   if (action === 'startRequest') {
-    if (!conv.currentRequestId && (ctx.service)) await startRequest(conv, ctx.service);
+    // Verificar registro del cliente antes de continuar
+    const clientExists = await Client.exists({ phone: last10(ctx.phone) });
+    if (!clientExists) {
+      conv.context = { ...conv.context, pendingService: ctx.service, flow: { nodeId: node.id, vars: ctx.vars } };
+      conv.markModified('context');
+      conv.step = 'AWAITING_CLIENT_NAME';
+      await reply(conv, ctx.phone,
+        `¡Excelente elección! 🙌 Para conectarte con los mejores profesionales de *${ctx.service || 'este servicio'}* solo necesitamos saber *¿cómo te llamas?*`
+      );
+      return '__pause__';
+    }
+    if (!conv.currentRequestId && ctx.service) await startRequest(conv, ctx.service);
     return null;
   }
 
@@ -437,6 +450,7 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
 
     if (node.type === 'action') {
       const out = await runAction(node, ctx, conv, phone, cfg);
+      if (out === '__pause__') return; // esperando nombre del cliente
       current = getNext(node.id, out);
       continue;
     }

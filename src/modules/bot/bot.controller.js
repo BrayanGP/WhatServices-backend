@@ -103,27 +103,7 @@ const processIncoming = async (msg, instance) => {
 
     if (conv.humanTakeover) { await conv.save(); return; }
 
-    // ---- Registro del cliente (boot de WhatsApp) ----
-    // Si el cliente nunca se ha registrado, pedimos su nombre antes de continuar.
-    // Se ejecuta solo cuando la conversación está en IDLE (saludo / primer mensaje).
-    if (conv.step === 'IDLE') {
-      const clientExists = await Client.exists({ phone: last10(phone) });
-      if (!clientExists) {
-        // Si WhatsApp nos dio el nombre (pushName), registrar silenciosamente sin interrumpir.
-        if (name && name.trim()) {
-          await Client.create({ name: name.trim(), phone: last10(phone), source: 'whatsapp_bot' }).catch(() => {});
-          // continúa al flujo normal
-        } else {
-          // Sin nombre: pedirlo explícitamente
-          conv.step = 'AWAITING_CLIENT_NAME';
-          await reply(conv, phone, '¡Hola! 👋 Antes de continuar, ¿cómo te llamas?');
-          await conv.save();
-          return;
-        }
-      }
-    }
-
-    // Captura de nombre cuando lo estaba esperando
+    // ---- Captura de nombre (cuando se pidió antes de mostrar resultados) ----
     if (conv.step === 'AWAITING_CLIENT_NAME') {
       const clientName = text.trim();
       if (clientName.length < 2) {
@@ -136,8 +116,36 @@ const processIncoming = async (msg, instance) => {
         { name: clientName, phone: last10(phone), source: 'whatsapp_bot' },
         { upsert: true, new: true },
       );
-      if (!conv.name) conv.name = clientName;
-      conv.step = 'IDLE'; // continúa al flujo normal como si fuera el primer saludo
+      conv.name = clientName;
+      // Retoma el servicio que eligió antes de que le pidiéramos el nombre
+      const pendingService = conv.context?.pendingService;
+      const pendingFlowNode = conv.context?.flow?.nodeId; // nodo del flujo visual donde se pausó
+      if (pendingService) {
+        conv.context = { ...conv.context, pendingService: undefined };
+        conv.markModified('context');
+        const cfg2 = await BotConfig.getSingleton();
+        if (pendingFlowNode) {
+          // Flujo visual: retomar desde el nodo que pausó (el motor lo reanudará al avanzar al siguiente)
+          conv.step = 'IDLE';
+          const flow = await BotFlow.getPublished();
+          if (flow) {
+            await reply(conv, phone, `¡Gracias, *${clientName}*! 🙌 Enseguida te mostramos los profesionales.`);
+            await conv.save();
+            // Ejecutar el flujo desde el nodo que sigue al startRequest
+            await runFlow({ conv, phone, text: pendingService, lower: pendingService.toLowerCase(), name: clientName, cfg: cfg2, flow });
+            await conv.save();
+            return;
+          }
+        }
+        // FSM legacy: continuar a AWAITING_MODE
+        conv.selectedService = pendingService;
+        conv.step = 'AWAITING_MODE';
+        await startRequest(conv, pendingService);
+        await reply(conv, phone, `¡Gracias, *${clientName}*! 🙌\n\n${fill(cfg2.messages.askMode, { service: pendingService })}`);
+        await conv.save();
+        return;
+      }
+      conv.step = 'IDLE';
     }
 
     // ---- Configuracion del bot (on/off + horario) ----
@@ -268,6 +276,17 @@ const processIncoming = async (msg, instance) => {
     };
 
     const askMode = async (serviceName) => {
+      // Si el cliente no está registrado, pedimos su nombre primero y guardamos el servicio pendiente
+      const clientExists = await Client.exists({ phone: last10(phone) });
+      if (!clientExists) {
+        conv.context = { ...conv.context, pendingService: serviceName };
+        conv.markModified('context');
+        conv.step = 'AWAITING_CLIENT_NAME';
+        await reply(conv, phone,
+          `¡Excelente elección! 🙌 Para conectarte con los mejores profesionales de *${serviceName}* solo necesitamos saber *¿cómo te llamas?*`
+        );
+        return;
+      }
       conv.selectedService = serviceName;
       conv.step = 'AWAITING_MODE';
       await startRequest(conv, serviceName);
