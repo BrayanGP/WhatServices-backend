@@ -103,17 +103,22 @@ const processIncoming = async (msg, instance) => {
 
     if (conv.humanTakeover) { await conv.save(); return; }
 
-    // ---- Registro del cliente (boot: primer mensaje / saludo) ----
-    console.log('[Bot] step:', conv.step, '| phone:', last10(phone));
+    // ---- Registro / saludo del cliente ----
     if (conv.step === 'IDLE') {
-      const clientExists = await Client.exists({ phone: last10(phone) });
-      console.log('[Bot] IDLE → clientExists:', !!clientExists);
-      if (!clientExists) {
+      const client = await Client.findOne({ phone: last10(phone) }).lean();
+      if (!client) {
+        // Nuevo cliente: pedir nombre antes de continuar
         conv.step = 'AWAITING_CLIENT_NAME';
         await reply(conv, phone, '¡Hola! 🙌 Para conectarte con los mejores profesionales solo necesitamos saber *¿cómo nos podemos dirigir hacia ti?*');
         await conv.save();
         return;
       }
+      // Cliente existente: guardar waName si cambió y saludar por nombre
+      if (name && name.trim() && name.trim() !== client.waName) {
+        await Client.updateOne({ _id: client._id }, { waName: name.trim() });
+      }
+      if (!conv.name) conv.name = client.name;
+      await reply(conv, phone, `¡Hola, *${client.name}*! 👋`);
     }
 
     // ---- Captura del nombre cuando lo estábamos esperando ----
@@ -126,7 +131,7 @@ const processIncoming = async (msg, instance) => {
       }
       await Client.findOneAndUpdate(
         { phone: last10(phone) },
-        { name: clientName, phone: last10(phone), source: 'whatsapp_bot' },
+        { name: clientName, phone: last10(phone), source: 'whatsapp_bot', ...(name?.trim() ? { waName: name.trim() } : {}) },
         { upsert: true, new: true },
       );
       conv.name = clientName;
@@ -135,7 +140,6 @@ const processIncoming = async (msg, instance) => {
 
     // ---- Configuracion del bot (on/off + horario) ----
     const cfg = await BotConfig.getSingleton();
-    console.log('[Bot] cfg.enabled:', cfg.enabled, '| isOpenNow:', cfg.isOpenNow());
     if (!cfg.enabled) { await conv.save(); return; } // bot apagado: no responde
 
     if (!cfg.isOpenNow()) {
