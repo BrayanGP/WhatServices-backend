@@ -85,7 +85,6 @@ const processIncoming = async (msg, instance) => {
 
     let conv = await Conversation.findOne({ phone });
     if (!conv) conv = await Conversation.create({ phone, name, instance });
-    if (name && !conv.name) conv.name = name;
     if (instance) conv.instance = instance;
 
     // Reinicio por inactividad: si pasaron >5 min, empezar la conversación de cero
@@ -103,21 +102,30 @@ const processIncoming = async (msg, instance) => {
 
     if (conv.humanTakeover) { await conv.save(); return; }
 
-    // ---- Registro / saludo del cliente ----
-    if (conv.step === 'IDLE') {
+    // ---- Registro / nombre del cliente ----
+    // sessionStarted se limpia al resetear la sesión por inactividad (conv.context = {})
+    const isSessionStart = conv.step === 'IDLE' && !conv.context?.sessionStarted;
+
+    if (isSessionStart) {
       const client = await Client.findOne({ phone: last10(phone) }).lean();
       if (!client) {
-        // Nuevo cliente: pedir nombre antes de continuar
+        // Nuevo cliente: pedir nombre (solo en el primer mensaje de sesión)
         conv.step = 'AWAITING_CLIENT_NAME';
         await reply(conv, phone, '¡Hola! 🙌 Para conectarte con los mejores profesionales solo necesitamos saber *¿cómo nos podemos dirigir hacia ti?*');
         await conv.save();
         return;
       }
-      // Cliente existente: guardar waName si cambió e inyectar nombre en el flujo
-      if (name && name.trim() && name.trim() !== client.waName) {
+      // Cliente existente: actualizar waName e inyectar nombre registrado en el flujo
+      if (name?.trim() && name.trim() !== client.waName) {
         await Client.updateOne({ _id: client._id }, { waName: name.trim() });
       }
-      conv.name = client.name; // disponible como {name} en el template del menú
+      conv.name = client.name; // sobreescribe pushName con el nombre real registrado
+      conv.context = { ...conv.context, sessionStarted: true };
+      conv.markModified('context');
+    } else if (!conv.name) {
+      // Mensajes siguientes: asegurar que el nombre siempre esté disponible para {name}
+      const client = await Client.findOne({ phone: last10(phone) }, 'name').lean();
+      if (client) conv.name = client.name;
     }
 
     // ---- Captura del nombre cuando lo estábamos esperando ----
