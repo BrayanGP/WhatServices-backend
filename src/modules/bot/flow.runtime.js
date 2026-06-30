@@ -116,33 +116,11 @@ const runAction = async (node, ctx, conv, phone, cfg) => {
   }
 
   if (action === 'startRequest') {
-    // Verificar registro del cliente antes de continuar
-    const clientExists = await Client.exists({ phone: last10(ctx.phone) });
-    if (!clientExists) {
-      conv.context = { ...conv.context, pendingService: ctx.service, flow: { nodeId: node.id, vars: ctx.vars } };
-      conv.markModified('context');
-      conv.step = 'AWAITING_CLIENT_NAME';
-      await reply(conv, ctx.phone,
-        `¡Excelente elección! 🙌 Para conectarte con los mejores profesionales de *${ctx.service || 'este servicio'}* solo necesitamos saber *¿cómo te llamas?*`
-      );
-      return '__pause__';
-    }
     if (!conv.currentRequestId && ctx.service) await startRequest(conv, ctx.service);
     return null;
   }
 
   if (action === 'search') {
-    // Verificar registro del cliente antes de buscar proveedores
-    const clientExistsSearch = await Client.exists({ phone: last10(ctx.phone) });
-    if (!clientExistsSearch) {
-      conv.context = { ...conv.context, pendingService: ctx.service, flow: { nodeId: node.id, vars: ctx.vars } };
-      conv.markModified('context');
-      conv.step = 'AWAITING_CLIENT_NAME';
-      await reply(conv, ctx.phone,
-        `¡Excelente elección! 🙌 Para conectarte con los mejores profesionales de *${ctx.service || 'este servicio'}* solo necesitamos saber *¿cómo te llamas?*`
-      );
-      return '__pause__';
-    }
     if (!conv.currentRequestId && ctx.service) await startRequest(conv, ctx.service);
     const mode = ctx.vars.searchMode || params.mode || 'score';
     ctx.vars.searchMode = mode;
@@ -461,7 +439,6 @@ const runFlow = async ({ conv, phone, text, lower, name, cfg, flow }) => {
 
     if (node.type === 'action') {
       const out = await runAction(node, ctx, conv, phone, cfg);
-      if (out === '__pause__') return; // esperando nombre del cliente
       current = getNext(node.id, out);
       continue;
     }
