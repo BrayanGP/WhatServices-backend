@@ -6,6 +6,7 @@ const Review = require('../reviews/review.model');
 const BotConfig = require('./botconfig.model');
 const Intent = require('./intent.model');
 const BotFlow = require('./botflow.model');
+const Client = require('../clients/client.model');
 const { runFlow } = require('./flow.runtime');
 const meta = require('../../utils/whatsappMeta');
 const { CLIENT_URL, WHATSAPP_VERIFY_TOKEN } = require('../../config/env');
@@ -16,6 +17,8 @@ const {
 } = require('./bot.helpers');
 
 // ----- Helpers de webhook -----
+
+const last10 = (p) => String(p || '').replace(/\D/g, '').slice(-10);
 
 const extractIncoming = (req) => {
   const data = req.body?.data;
@@ -99,6 +102,43 @@ const processIncoming = async (msg, instance) => {
     saveMsg(conv, 'client', text);
 
     if (conv.humanTakeover) { await conv.save(); return; }
+
+    // ---- Registro del cliente (boot de WhatsApp) ----
+    // Si el cliente nunca se ha registrado, pedimos su nombre antes de continuar.
+    // Se ejecuta solo cuando la conversación está en IDLE (saludo / primer mensaje).
+    if (conv.step === 'IDLE') {
+      const clientExists = await Client.exists({ phone: last10(phone) });
+      if (!clientExists) {
+        // Si WhatsApp nos dio el nombre (pushName), registrar silenciosamente sin interrumpir.
+        if (name && name.trim()) {
+          await Client.create({ name: name.trim(), phone: last10(phone), source: 'whatsapp_bot' }).catch(() => {});
+          // continúa al flujo normal
+        } else {
+          // Sin nombre: pedirlo explícitamente
+          conv.step = 'AWAITING_CLIENT_NAME';
+          await reply(conv, phone, '¡Hola! 👋 Antes de continuar, ¿cómo te llamas?');
+          await conv.save();
+          return;
+        }
+      }
+    }
+
+    // Captura de nombre cuando lo estaba esperando
+    if (conv.step === 'AWAITING_CLIENT_NAME') {
+      const clientName = text.trim();
+      if (clientName.length < 2) {
+        await reply(conv, phone, 'Por favor escríbenos tu nombre para continuar. 😊');
+        await conv.save();
+        return;
+      }
+      await Client.findOneAndUpdate(
+        { phone: last10(phone) },
+        { name: clientName, phone: last10(phone), source: 'whatsapp_bot' },
+        { upsert: true, new: true },
+      );
+      if (!conv.name) conv.name = clientName;
+      conv.step = 'IDLE'; // continúa al flujo normal como si fuera el primer saludo
+    }
 
     // ---- Configuracion del bot (on/off + horario) ----
     const cfg = await BotConfig.getSingleton();
